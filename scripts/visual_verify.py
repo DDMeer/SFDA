@@ -7,7 +7,9 @@ from models.glow_model import SimplifiedGlow
 # --- 配置 ---
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 CHECKPOINT = "checkpoints/glow_stage1.pth"
-IMAGE_PATH = "data/art_painting/dog/dct_pic_001.jpg" # 换成你文件夹里真实存在的图
+# 这里的路径要指向你现在 data 文件夹下真实存在的图片
+# 根据你的截图，0 文件夹下有 0.jpg
+IMAGE_PATH = "data/cartoon/1/2437.jpg" # 换成你文件夹里真实存在的图
 OUTPUT_DIR = "verification_results"
 SPLIT_DIM = 8
 
