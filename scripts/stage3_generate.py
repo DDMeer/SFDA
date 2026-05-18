@@ -1,43 +1,28 @@
-# --- 1. 核心环境修复 (必须置顶，解决所有版本冲突和导入错误) ---
-import sys
-import os
-
-# 补丁 A: 修复 huggingface_hub 缺少 cached_download 的问题
-try:
-    import huggingface_hub
-    if not hasattr(huggingface_hub, "cached_download"):
-        # 现代版本将其更名为 hf_hub_download，我们手动做一个映射
-        huggingface_hub.cached_download = huggingface_hub.hf_hub_download
-except ImportError:
-    pass
-
 import torch
+import os
+import sys
+import numpy as np
+from PIL import Image
+import torch.nn as nn
+import torchvision.transforms as T
 
-# 补丁 B: 模拟 Intel XPU 接口 (防止 diffusers 硬件探测报错)
+# --- 1. 终极环境补丁 ---
+import huggingface_hub
+if not hasattr(huggingface_hub, "cached_download"):
+    huggingface_hub.cached_download = huggingface_hub.hf_hub_download
+
 if not hasattr(torch, 'xpu'):
     class MockXPU:
-        def __init__(self):
-            self.device_count = lambda: 0
-            self.is_available = lambda: False
         def __getattr__(self, name): return lambda *args, **kwargs: None
     torch.xpu = MockXPU()
 
-# 补丁 C: 强制让 transformers 认为 PyTorch 是可用的 (针对 2.2.2 的版本判定)
-import transformers
-transformers.utils.import_utils._torch_available = True
-
-# --- 2. 导入核心依赖 (现在的顺序是安全的) ---
-import torch.nn as nn
-from PIL import Image
-import torchvision.transforms as T
-from diffusers import StableDiffusionPipeline
+# --- 2. 导入依赖 ---
+from diffusers import StableDiffusionImg2ImgPipeline
 import clip
-
-# 导入自定义 Glow 路径
 sys.path.append(os.getcwd())
 from models.glow_model import SimplifiedGlow
 
-# --- 3. 映射网络 (ConceptBridge) ---
+# --- 3. 映射网络 ---
 class ConceptBridge(nn.Module):
     def __init__(self, zc_channels=8, img_size=32, clip_dim=512):
         super().__init__()
@@ -46,7 +31,6 @@ class ConceptBridge(nn.Module):
             nn.Linear(zc_channels * img_size * img_size, 1024),
             nn.BatchNorm1d(1024),
             nn.ReLU(),
-            nn.Dropout(0.3),
             nn.Linear(1024, 512),
             nn.BatchNorm1d(512),
             nn.ReLU(),
@@ -54,24 +38,21 @@ class ConceptBridge(nn.Module):
         )
     def forward(self, z_c): return self.net(z_c)
 
-# --- 4. 配置 ---
-# 虽然在模拟模式下，我们依然尝试调用 MPS (Apple GPU)
 device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 CLASS_MAP = {0: "dog", 1: "elephant", 2: "giraffe", 3: "guitar", 4: "horse", 5: "house", 6: "person"}
 
-# --- 5. 模型加载逻辑 ---
-def load_all_models():
-    print(f"🖥️  运行设备: {device} | 模式: 终极兼容版 (Rosetta/Intel)")
+# --- 4. 模型加载 ---
+def load_models():
+    print(f"🖥️  设备: {device} | 正在开启 [保形重构] 模式")
     
-    # 加载 Stable Diffusion 1.5，禁用安全检查器
-    pipe = StableDiffusionPipeline.from_pretrained(
+    # 使用 Img2Img 管道，这是保形的关键
+    pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
         "runwayml/stable-diffusion-v1-5", 
-        torch_dtype=torch.float32, # 在模拟模式下，float32 往往比 float16 更稳
+        torch_dtype=torch.float32,
         safety_checker=None,
         requires_safety_checker=False
     ).to(device)
     
-    print("📦 正在加载 Glow & Bridge 权重...")
     glow = SimplifiedGlow().to(device)
     glow.load_state_dict(torch.load('checkpoints/glow_stage1.pth', map_location=device))
     glow.eval()
@@ -82,58 +63,56 @@ def load_all_models():
     
     return pipe, glow, bridge
 
-# --- 6. 生成函数 ---
-def sfda_inference(img_path, pipe, glow, bridge):
-    img = Image.open(img_path).convert('RGB')
-    transform = T.Compose([T.Resize((64, 64)), T.ToTensor()])
-    x = transform(img).unsqueeze(0).to(device)
+# --- 5. 核心逻辑 ---
+def sfda_reconstruct(img_path, pipe, glow, bridge):
+    raw_img = Image.open(img_path).convert('RGB')
+    transform = T.Compose([T.Resize((512, 512)), T.ToTensor()]) # SD 需要 512x512
+    glow_transform = T.Compose([T.Resize((64, 64)), T.ToTensor()])
+    
+    x_glow = glow_transform(raw_img).unsqueeze(0).to(device)
 
     with torch.no_grad():
-        # 灵魂提取
-        _, z_c, _ = glow.transform_to_noise(x)
-        concept_vec = bridge(z_c) 
+        # A. 剥离纤维，提取底座灵魂
+        outputs = glow.transform_to_noise(x_glow)
+        z_tensors = [t for t in outputs if isinstance(t, torch.Tensor) and t.dim() == 4]
+        z_c, z_s = z_tensors[0], z_tensors[1]
         
-        # 语义识别
+        # B. 生成“影子底稿” (保形关键)
+        z_s_zero = torch.zeros_like(z_s)
+        x_rec = glow.reverse(z_c, z_s_zero)
+        
+        # 将影子图转为 PIL 格式作为 SD 的引导
+        recon_base = x_rec[0].cpu().permute(1,2,0).clamp(0,1).numpy()
+        recon_base_img = Image.fromarray((recon_base * 255).astype(np.uint8)).resize((512,512))
+        recon_base_img.save("results/debug_base_structure.png") # 供你检查底稿
+        
+        # C. 语义识别
+        concept_vec = bridge(z_c)
         clip_model, _ = clip.load("ViT-B/32", device=device)
-        text_inputs = torch.cat([clip.tokenize(f"a photo of a {c}") for c in CLASS_MAP.values()]).to(device)
-        text_features = clip_model.encode_text(text_inputs)
-        
-        concept_vec /= concept_vec.norm(dim=-1, keepdim=True)
-        text_features /= text_features.norm(dim=-1, keepdim=True)
-        similarity = (concept_vec @ text_features.T).softmax(dim=-1)
-        concept_name = CLASS_MAP[similarity.argmax().item()]
-        
-    print(f"🎯 识别到灵魂: {concept_name} (置信度: {similarity.max().item():.2f})")
-    
-    # 灵魂重塑
-    image = pipe(
-        prompt=f"a realistic high-quality photo of a {concept_name}, ultra detailed, 8k",
-        num_inference_steps=20, # 适当减少步数以加快在模拟模式下的速度
-        guidance_scale=7.5
+        text_tokens = torch.cat([clip.tokenize(f"a photo of a {c}") for c in CLASS_MAP.values()]).to(device)
+        text_features = clip_model.encode_text(text_tokens)
+        similarity = (concept_vec / concept_vec.norm(dim=-1, keepdim=True) @ (text_features / text_features.norm(dim=-1, keepdim=True)).T).softmax(dim=-1)
+        label = CLASS_MAP[similarity.argmax().item()]
+
+    print(f"🎯 识别概念: {label} | 影子底稿已生成")
+
+    # D. 结合影子底稿和语义标签进行重绘
+    # strength=0.6 表示保留 60% 的影子轮廓，40% 由 SD 自由发挥写实纹理
+    final_image = pipe(
+        prompt=f"a realistic high-quality photo of a {label}, highly detailed, national geographic style",
+        image=recon_base_img,
+        strength=0.6, 
+        guidance_scale=8.0
     ).images[0]
     
-    return image, concept_name
+    return final_image, label
 
-# --- 7. 主程序 ---
 if __name__ == "__main__":
-    # 路径匹配
-    TEST_IMAGE = ""
-    target_dir = "data/art_painting"
-    for root, dirs, files in os.walk(target_dir):
-        for file in files:
-            if file.lower().endswith((".jpg", ".png", ".jpeg")):
-                TEST_IMAGE = os.path.join(root, file)
-                break
-        if TEST_IMAGE: break
-
-    print(f"🚀 SFDA 启动 | 目标: {TEST_IMAGE}")
+    TEST_PATH = "data/art_painting/0/63.jpg"
+    os.makedirs('results', exist_ok=True)
     
-    try:
-        sd_pipe, model_glow, model_bridge = load_all_models()
-        result, label = sfda_inference(TEST_IMAGE, sd_pipe, model_glow, model_bridge)
-        
-        os.makedirs('results', exist_ok=True)
-        result.save(f"results/final_output_{label}.png")
-        print(f"✅ 生成成功！文件: results/final_output_{label}.png")
-    except Exception as e:
-        print(f"❌ 运行报错: {e}")
+    sd, gl, br = load_models()
+    res, name = sfda_reconstruct(TEST_PATH, sd, gl, br)
+    
+    res.save(f"results/final_recon_{name}.png")
+    print(f"✅ 保形重构完成！请对比 results/debug_base_structure.png 和 final_recon_{name}.png")
