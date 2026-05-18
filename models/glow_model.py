@@ -6,9 +6,16 @@ class SqueezeLayer(nn.Module):
     def forward(self, x, reverse=False):
         B, C, H, W = x.shape
         if not reverse:
+            # 正向：[B, 3, 64, 64] -> [B, 12, 32, 32]
             x = x.reshape(B, C, H // 2, 2, W // 2, 2)
             x = x.permute(0, 1, 3, 5, 2, 4).reshape(B, C * 4, H // 2, W // 2)
-        return x
+            return x
+        else:
+            # 反向：[B, 12, 32, 32] -> [B, 3, 64, 64]
+            # 这是刚才漏掉的关键代码！
+            x = x.reshape(B, C // 4, 2, 2, H, W)
+            x = x.permute(0, 1, 4, 2, 5, 3).reshape(B, C // 4, H * 2, W * 2)
+            return x
 
 class Invertible1x1Conv(nn.Module):
     def __init__(self, num_channels):
@@ -54,7 +61,7 @@ class SimplifiedGlow(nn.Module):
     def __init__(self, num_layers=8, in_channels=3):
         super().__init__()
         self.squeeze = SqueezeLayer()
-        mid_channels = in_channels * 4 # 12 通道
+        mid_channels = in_channels * 4
         self.layers = nn.ModuleList([
             nn.ModuleList([Invertible1x1Conv(mid_channels), AffineCoupling(mid_channels)])
             for _ in range(num_layers)
@@ -68,15 +75,14 @@ class SimplifiedGlow(nn.Module):
             x, ld2 = coupling(x)
             log_det += (ld1 + ld2)
         
-        # --- 核心修改：改为 4:8 划分，给底座(z_c)分配更多比特 ---
-        z_s = x[:, :4, :, :] # 风格纤维 (Visual Elements)
-        z_c = x[:, 4:, :, :] # 语义底座 (Concepts)
+        z_s = x[:, :4, :, :]
+        z_c = x[:, 4:, :, :]
         return z_s, z_c, log_det
 
     def reverse(self, z_s, z_c):
-        # --- 核心修改：匹配拼接逻辑 ---
         z = torch.cat([z_s, z_c], dim=1)
         for conv, coupling in reversed(self.layers):
             z = coupling(z, reverse=True)
             z = conv(z, reverse=True)
+        # 这里的 reverse=True 现在会正确地将 12 通道变回 3 通道
         return self.squeeze(z, reverse=True)

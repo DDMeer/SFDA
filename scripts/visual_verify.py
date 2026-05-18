@@ -6,7 +6,7 @@ from torchvision.utils import save_image
 from models.glow_model import SimplifiedGlow
 
 # 替换成你想要验证的图片路径
-IMAGE_PATH = "data/PACS/art_painting/dog/001.jpg" # 请确保路径正确
+IMAGE_PATH = "data/art_painting/0/115.jpg" # 请确保路径正确
 SAVE_PATH = "verification_results/comparison_res_v2.png"
 device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
