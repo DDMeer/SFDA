@@ -8,9 +8,6 @@ class SqueezeLayer(nn.Module):
         if not reverse:
             x = x.reshape(B, C, H // 2, 2, W // 2, 2)
             x = x.permute(0, 1, 3, 5, 2, 4).reshape(B, C * 4, H // 2, W // 2)
-        else:
-            x = x.reshape(B, C // 4, 2, 2, H, W)
-            x = x.permute(0, 1, 4, 2, 5, 3).reshape(B, C // 4, H * 2, W * 2)
         return x
 
 class Invertible1x1Conv(nn.Module):
@@ -22,7 +19,6 @@ class Invertible1x1Conv(nn.Module):
 
     def forward(self, x, reverse=False):
         if not reverse:
-            # 针对 M2 Max 的优化：在 CPU 计算 slogdet
             _, logabsdet = torch.slogdet(self.weight.to("cpu"))
             logabsdet = logabsdet.to(x.device)
             return F.conv2d(x, self.weight[:, :, None, None]), logabsdet * x.size(2) * x.size(3)
@@ -72,13 +68,13 @@ class SimplifiedGlow(nn.Module):
             x, ld2 = coupling(x)
             log_det += (ld1 + ld2)
         
-        # --- 核心修改：将 12 通道按 6:6 切分 ---
-        z_s = x[:, :6, :, :] # 风格纤维
-        z_c = x[:, 6:, :, :] # 语义底座
+        # --- 核心修改：改为 4:8 划分，给底座(z_c)分配更多比特 ---
+        z_s = x[:, :4, :, :] # 风格纤维 (Visual Elements)
+        z_c = x[:, 4:, :, :] # 语义底座 (Concepts)
         return z_s, z_c, log_det
 
     def reverse(self, z_s, z_c):
-        # --- 核心修改：重新合并 ---
+        # --- 核心修改：匹配拼接逻辑 ---
         z = torch.cat([z_s, z_c], dim=1)
         for conv, coupling in reversed(self.layers):
             z = coupling(z, reverse=True)
