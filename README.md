@@ -4,7 +4,7 @@
 
 ---
 
-## 🏗️ 核心架构与 4 阶段逻辑 (Four-Stage Pipeline)
+## 核心架构与 4 阶段逻辑 (Four-Stage Pipeline)
 
 项目完全契合“底座与纤维”的数学构造，代码分为以下四个演进阶段：
 
@@ -29,7 +29,8 @@
 
 
 
-### 1. 本地生成环境说明书（供项目维护者使用）
-如果你在本地修改了依赖，请在 `sfda_env` 环境下运行以下命令，更新环境配置文件：
-```bash
-conda env export --no-builds > environment.yml
+### 1. 本地生成环境说明书
+conda create -n sfda_env python=3.10 -y
+conda activate sfda_env
+pip install -r requirements.txt
+pip install git+https://github.com/openai/CLIP.git
