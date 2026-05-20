@@ -50,6 +50,7 @@ pip install git+https://github.com/openai/CLIP.git -->
 
 
 
+# Stable Diffusion 顺着这个“影子底稿”和 CLIP 的文本指引，最终在目录下吐出来的真实照片级图像
 
 ### python scripts/stage3_generate.py --image data/art_painting/0/63.jpg
 

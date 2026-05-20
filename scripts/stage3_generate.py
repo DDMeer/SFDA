@@ -129,7 +129,7 @@ def sfda_inference(img_path, pipe, glow, bridge, forced_label=None):
         prompt=f"a realistic high-quality photo of a {label}, cinematic lighting, 8k, highly detailed",
         negative_prompt="cartoon, painting, blurry, lowres, sketch, abstract, cross-eyed",
         image=structure_base,
-        strength=0.55, 
+        strength=0.45, 
         guidance_scale=8.5
     ).images[0]
     
