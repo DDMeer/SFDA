@@ -65,7 +65,7 @@ pip install git+https://github.com/openai/CLIP.git -->
 
 
 输入：
-![Demo Screenshot](demo/fig_3.png)
+![Demo Screenshot](demo/fig_3.jpg)
 
 输出：
 ![Demo Screenshot](demo/fig_4.png)
