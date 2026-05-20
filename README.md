@@ -1,6 +1,6 @@
 # Source-Free Domain Adaptation (SFDA) via Fiber Bundle Disentanglement and Active Learning
 
-本项目基于纤维丛理论 (Fiber Bundle Theory)，构建了一个跨域的无源领域自适应 (SFDA) 生成与重构框架。系统能够从源域（如：艺术油画 `art_painting`）中解耦出不随风格改变的**几何拓扑底座 ($z_c$)**，并在目标域（如：写实照片 `photo`）中利用生成模型重塑其视觉纤维 ($z_s$)。最终，通过主动学习 (Active Learning)错题本机制实现模型的自我进化。
+本项目基于纤维丛理论 (Fiber Bundle Theory)，构建了一个跨域的无源领域自适应 (SFDA) 生成与重构框架。系统能够从源域中解耦出不随风格改变的**几何拓扑底座 ($z_c$)**，并在目标域中利用生成模型重塑其视觉纤维 ($z_s$)。最终，通过主动学习 (Active Learning)错题本机制实现模型的自我进化。
 
 ---
 
@@ -25,7 +25,7 @@
 
 ---
 
-## 环境配置
+<!-- ## 环境配置
 
 
 
@@ -33,4 +33,18 @@
 conda create -n sfda_env python=3.10 -y
 conda activate sfda_env
 pip install -r requirements.txt
-pip install git+https://github.com/openai/CLIP.git
+pip install git+https://github.com/openai/CLIP.git -->
+
+
+# 验证几何解耦
+
+python scripts/visualize_zc.py
+
+![Demo Screenshot](demo/fig_1.png)
+
+
+
+python scripts/verify_stage1.py
+
+![Demo Screenshot](demo/fig_2.png)
+

@@ -12,7 +12,7 @@ class SqueezeLayer(nn.Module):
             return x
         else:
             # 反向：[B, 12, 32, 32] -> [B, 3, 64, 64]
-            # 这是刚才漏掉的关键代码！
+
             x = x.reshape(B, C // 4, 2, 2, H, W)
             x = x.permute(0, 1, 4, 2, 5, 3).reshape(B, C // 4, H * 2, W * 2)
             return x

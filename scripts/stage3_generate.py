@@ -86,7 +86,9 @@ def sfda_inference(img_path, pipe, glow, bridge, forced_label=None):
         
         # 制造影子底稿 (骨架图)
         z_s_zero = torch.zeros_like(z_s)
-        x_rec = glow.reverse(z_c, z_s_zero)
+
+        # 正确的修复代码
+        x_rec = glow.reverse(z_s_zero, z_c)
         recon_np = x_rec[0].cpu().permute(1,2,0).clamp(0,1).numpy()
         structure_base = Image.fromarray((recon_np * 255).astype(np.uint8)).resize((512,512))
         
