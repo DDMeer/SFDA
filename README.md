@@ -38,13 +38,40 @@ pip install git+https://github.com/openai/CLIP.git -->
 
 # 验证几何解耦
 
-python scripts/visualize_zc.py
+### python scripts/visualize_zc.py
 
 ![Demo Screenshot](demo/fig_1.png)
 
 
 
-python scripts/verify_stage1.py
+### python scripts/verify_stage1.py
 
 ![Demo Screenshot](demo/fig_2.png)
+
+
+
+
+### python scripts/stage3_generate.py --image data/art_painting/0/63.jpg
+
+语义识别概率分布诊断：
+  [0] dog       : 0.1469
+  [1] elephant  : 0.1343
+  [2] giraffe   : 0.1609 ⭐
+  [3] guitar    : 0.1385
+  [4] horse     : 0.1399
+  [5] house     : 0.1385
+  [6] person    : 0.1410
+最终提取概念: giraffe
+
+
+输入：
+![Demo Screenshot](demo/fig_3.png)
+
+输出：
+![Demo Screenshot](demo/fig_4.png)
+
+
+
+
+
 
