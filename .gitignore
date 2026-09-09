@@ -20,3 +20,6 @@ checkpoints/source/
 
 # 训练日志（可由重跑复现；值得留存的是 baseline JSON / 配置 / seed / checkpoint metadata）
 logs/
+
+# Stage 1 权重约 67MB 不入库；同目录的 .json 指标保留跟踪
+checkpoints/stage1/*.pth
