@@ -104,5 +104,8 @@ if __name__ == '__main__':
     ap.add_argument('--batch-size', type=int, default=64)
     ap.add_argument('--workers', type=int, default=4)
     a = ap.parse_args()
-    assert a.source != a.target, '源域与目标域不能相同'
+    if a.source == a.target:
+        # 源域自身的特征缓存：用于源域参考诊断、抗遗忘检查、域健全性检查等。
+        # 注意它不是适应意义上的「目标域」——源域也是 F 的训练域。
+        print(f'ℹ️  source == target == {a.source}：生成源域自身的参考缓存')
     build_cache(a.source, a.target, a.batch_size, a.workers)
