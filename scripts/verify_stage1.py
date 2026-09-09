@@ -31,31 +31,16 @@ def verify():
     x = transform(img).unsqueeze(0).to(device)
 
     with torch.no_grad():
-        # --- 健壮的解包逻辑 ---
-        outputs = glow.transform_to_noise(x)
-        
-        # 寻找 4 维的张量作为 z_c 和 z_s
-        z_tensors = [t for t in outputs if isinstance(t, torch.Tensor) and t.dim() == 4]
-        
-        if len(z_tensors) < 2:
-            # 兼容另一种实现：只返回了一个合并后的 z 和一个 log_det
-            z_full = z_tensors[0]
-            z_c = z_full[:, :8, :, :] # 假设前 8 通道是 z_c
-            z_s = z_full[:, 8:, :, :] # 假设后 8 通道是 z_s
-        else:
-            # 假设第一个 4D 张量是 z_c，第二个是 z_s
-            z_c, z_s = z_tensors[0], z_tensors[1]
+        # --- 显式解包：transform_to_noise 返回 (z_s, z_c, log_det) ---
+        z_s, z_c, _ = glow.transform_to_noise(x)
+        assert z_s.shape[1] == 4, f"z_s 应为 4 通道 (style)，实得 {z_s.shape[1]}"
+        assert z_c.shape[1] == 8, f"z_c 应为 8 通道 (content)，实得 {z_c.shape[1]}"
 
         print(f"📊 提取成功: z_c 维度 {z_c.shape}, z_s 维度 {z_s.shape}")
 
-        # --- 执行逆向重构 (zs 归零) ---
+        # --- 执行逆向重构 (zs 归零：抹掉风格纤维，保留内容底座) ---
         z_s_zero = torch.zeros_like(z_s)
-        try:
-            x_rec = glow.reverse(z_c, z_s_zero)
-        except Exception as e:
-            # 如果 reverse 函数的参数顺序反了，尝试调换
-            print("🔄 尝试调换 reverse 参数顺序...")
-            x_rec = glow.reverse(z_s_zero, z_c)
+        x_rec = glow.reverse(z_s_zero, z_c)
     
     # --- 可视化 ---
     plt.figure(figsize=(15, 5))
