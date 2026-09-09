@@ -88,14 +88,13 @@ def train_bridge():
             labels = labels.to(device)
 
             with torch.no_grad():
-                # 1. 通过 Glow 提取 z_c (4通道)
-                outputs = glow.transform_to_noise(imgs)
-                z_tensors = [t for t in outputs if isinstance(t, torch.Tensor) and t.dim() == 4]
-                z_c = z_tensors[0] 
-                
-                # 2. 核心补丁：Padding 补齐到 8 通道 (训练推理必须一致)
-                padding = torch.zeros_like(z_c).to(device)
-                z_c_input = torch.cat([z_c, padding], dim=1) # [B, 8, 32, 32]
+                # 1. 显式解包：transform_to_noise 返回 (z_s, z_c, log_det)
+                z_s, z_c, _ = glow.transform_to_noise(imgs)
+                assert z_s.shape[1] == 4, f"z_s 应为 4 通道 (style)，实得 {z_s.shape[1]}"
+                assert z_c.shape[1] == 8, f"z_c 应为 8 通道 (content)，实得 {z_c.shape[1]}"
+
+                # 2. z_c 本身即 8 通道，直接作为 Bridge 输入（不再需要 padding 补齐）
+                z_c_input = z_c # [B, 8, 32, 32]
 
             # 3. 前向传播
             pred_features = bridge(z_c_input)

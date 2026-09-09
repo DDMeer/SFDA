@@ -30,17 +30,18 @@ def visualize_zc():
     x = transform(img).unsqueeze(0).to(device)
 
     with torch.no_grad():
-        # 提取底座 z_c
-        outputs = glow.transform_to_noise(x)
-        # 根据之前的报错，z_c 是 outputs 中的第一个 4 维张量
-        z_tensors = [t for t in outputs if isinstance(t, torch.Tensor) and t.dim() == 4]
-        z_c = z_tensors[0] # [1, 4, 32, 32]
+        # 提取底座 z_c：显式解包 (z_s, z_c, log_det)
+        z_s, z_c, _ = glow.transform_to_noise(x)
+        assert z_s.shape[1] == 4, f"z_s 应为 4 通道 (style)，实得 {z_s.shape[1]}"
+        assert z_c.shape[1] == 8, f"z_c 应为 8 通道 (content)，实得 {z_c.shape[1]}"
+        # z_c: [1, 8, 32, 32]
 
-    # 3. 绘制 4 个通道的热力图
-    fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+    # 3. 绘制 z_c 全部通道的热力图
+    num_ch = z_c.shape[1]
+    fig, axes = plt.subplots(1, num_ch, figsize=(2.5 * num_ch, 5))
     fig.suptitle('Visualizing $z_c$ (The Content Base) Channels', fontsize=16)
 
-    for i in range(4):
+    for i in range(num_ch):
         channel_data = z_c[0, i].cpu().numpy()
         # 归一化便于观察
         channel_data = (channel_data - channel_data.min()) / (channel_data.max() - channel_data.min() + 1e-8)

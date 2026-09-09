@@ -79,15 +79,13 @@ def sfda_inference(img_path, pipe, glow, bridge, forced_label=None):
     x_glow = glow_trans(raw_img).unsqueeze(0).to(device)
 
     with torch.no_grad():
-        # A. 提取几何底座 z_c (骨架)
-        outputs = glow.transform_to_noise(x_glow)
-        z_tensors = [t for t in outputs if isinstance(t, torch.Tensor) and t.dim() == 4]
-        z_c, z_s = z_tensors[0], z_tensors[1]
-        
-        # 制造影子底稿 (骨架图)
-        z_s_zero = torch.zeros_like(z_s)
+        # A. 提取几何底座：显式解包 (z_s, z_c, log_det)
+        z_s, z_c, _ = glow.transform_to_noise(x_glow)
+        assert z_s.shape[1] == 4, f"z_s 应为 4 通道 (style)，实得 {z_s.shape[1]}"
+        assert z_c.shape[1] == 8, f"z_c 应为 8 通道 (content)，实得 {z_c.shape[1]}"
 
-        # 正确的修复代码
+        # 制造影子底稿 (骨架图)：抹掉风格纤维，保留内容底座
+        z_s_zero = torch.zeros_like(z_s)
         x_rec = glow.reverse(z_s_zero, z_c)
         recon_np = x_rec[0].cpu().permute(1,2,0).clamp(0,1).numpy()
         structure_base = Image.fromarray((recon_np * 255).astype(np.uint8)).resize((512,512))
@@ -100,11 +98,8 @@ def sfda_inference(img_path, pipe, glow, bridge, forced_label=None):
             label = forced_label
             print(f"⚠️  手动指定标签为: {label}")
         else:
-            # 补齐通道以适配 Bridge 网络
-            padding = torch.zeros_like(z_c).to(device)
-            z_c_padded = torch.cat([z_c, padding], dim=1)
-
-            concept_vec = bridge(z_c_padded)
+            # z_c 本身即 8 通道，直接输入 Bridge（与 Stage 2 的构造保持一致）
+            concept_vec = bridge(z_c)
             clip_model, _ = clip.load("ViT-B/32", device=device)
             text_tokens = torch.cat([clip.tokenize(f"a photo of a {c}") for c in CLASS_MAP.values()]).to(device)
             text_features = clip_model.encode_text(text_tokens)
