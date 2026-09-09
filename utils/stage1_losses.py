@@ -92,3 +92,90 @@ def style_removal_ratio(f, f_c):
     r_style 仍显著非零。
     """
     return ((f - f_c).norm(dim=1) / f.norm(dim=1).clamp_min(1e-12)).mean()
+
+
+def _jvp_double_vjp(fn, primal, tangent):
+    """用两次反向模式求导计算 JVP：J·tangent。
+
+    为什么不用 torch.func.jvp：它在 PyTorch 2.2.2 + MPS 上前向可用，但对
+    参数 backward 会触发内部断言
+    `as_strided_tensorimpl does not work with MPS`。double-VJP 是纯反向模式，
+    在 MPS 上可正常回传，且实测与 torch.func.jvp 数值完全一致。
+
+    注意：**不替换 primal**。primal 通常是 z_c = g_c(f; theta)，它本身依赖
+    网络参数；若在此处 detach，切空间的求值点就被当成常数，loss 通过「切空间
+    所处 latent 位置」回到 forward INN 的梯度路径会被切断，变成 stop-gradient
+    近似。实测两者 forward 值相同，但参数梯度的余弦相似度只有约 0.984。
+    """
+    y = fn(primal)
+    u = torch.zeros_like(y, requires_grad=True)
+    (jt_u,) = torch.autograd.grad(y, primal, grad_outputs=u, create_graph=True)
+    (jv,) = torch.autograd.grad(jt_u, u, grad_outputs=tangent, create_graph=True)
+    return jv
+
+
+def tangent_orthogonality(inverse_fn, z_c, z_s, generator=None, eps=1e-8,
+                          detach_latent=False, return_diagnostics=False):
+    """L_orth：水平（语义）与垂直（风格）切子空间的正交性。
+
+    采用**逆映射的切空间形式**，这是 research_idea.pdf「特征点的切空间可被
+    唯一分解为切于风格纤维的垂直子空间与同构于底流形切空间的水平子空间；
+    ……这两个子空间在黎曼度量下的正交可分性」的字面对应：
+
+        h(z_c, z_s) = g^{-1}(z_c, z_s)
+        a_c = (∂h/∂z_c) · w      w ~ 单位随机方向 ∈ R^{n_c}   水平切向量
+        a_s = (∂h/∂z_s) · v      v ~ 单位随机方向 ∈ R^{n_s}   垂直切向量
+
+        cos    = <a_c, a_s> / (||a_c||·||a_s|| + eps)
+        L_orth = mean(cos²)
+
+    说明与限定：
+    - 垂直子空间 V = span(∂h/∂z_s 的列) = ker(∂z_c/∂f)，即纤维的切空间；
+      水平子空间 H = span(∂h/∂z_c 的列) = ker(∂z_s/∂f)，由平凡化本身诱导的
+      平坦联络给出。一般纤维丛的水平子空间需要联络才能确定，这个选择应在
+      论文中明写。
+    - 度量取特征空间欧氏内积 G = I，首版实现选择；若要让「黎曼」二字承担
+      计算内容，需换成拉回度量（如 Fisher）。
+    - 用余弦平方而非原始内积平方，是为了**尺度不变**：否则整体缩小 ∂h/∂z_s
+      即可降低损失，而不真正把夹角掰正。实测 eps=0 时尺度不变性精确到机器
+      精度；默认 eps=1e-8 仅在切向量范数极小时引入约 1e-7 的相对偏差。
+    - 这是基于随机方向的**主角度代理**，不是精确主角度或 ||J_c G J_sᵀ||_F。
+      精确版本需对两个雅可比块做 QR 后算主角度，代价过高，只适合小批量诊断。
+    - 可证明该条件与编码器形式 J_c J_sᵀ = 0 等价（对可逆的 g），但两者作为
+      损失函数的梯度与条件数不同。
+    - 在零初始化的 INN 上 L_orth ≡ 0 且梯度为零：此时 ActNorm 是对角、混合层
+      是置换、耦合层是恒等，整个雅可比为单项矩阵，两组坐标支撑天然不相交。
+      它只有在耦合层脱离恒等后才产生信号——这正是它要对抗的漂移。
+
+    Args:
+        inverse_fn: 可调用 (z_c, z_s) -> f，通常是 inn.inverse
+        z_c: [B, n_c]   z_s: [B, n_s]   应保留计算图（不要在 no_grad 下调用）
+        detach_latent: 仅供诊断对照；置 True 会切断经由 latent 求值点的梯度
+        return_diagnostics: 额外返回 |cos| 与切向量范数
+
+    Returns:
+        标量张量；若 return_diagnostics 则返回 (loss, dict)。
+    """
+    if detach_latent:
+        z_c = z_c.detach().requires_grad_(True)
+        z_s = z_s.detach().requires_grad_(True)
+    if not (z_c.requires_grad and z_s.requires_grad):
+        raise RuntimeError(
+            'tangent_orthogonality 需要 z_c/z_s 保留计算图才能求切向量。'
+            '请勿在 torch.no_grad() 下调用；纯诊断可传 detach_latent=True。')
+
+    w = torch.randn(z_c.shape, generator=generator, device=z_c.device, dtype=z_c.dtype)
+    v = torch.randn(z_s.shape, generator=generator, device=z_s.device, dtype=z_s.dtype)
+    w = w / w.norm(dim=1, keepdim=True).clamp_min(eps)
+    v = v / v.norm(dim=1, keepdim=True).clamp_min(eps)
+
+    a_c = _jvp_double_vjp(lambda t: inverse_fn(t, z_s), z_c, w)
+    a_s = _jvp_double_vjp(lambda t: inverse_fn(z_c, t), z_s, v)
+
+    nc, ns = a_c.norm(dim=1), a_s.norm(dim=1)
+    cos = (a_c * a_s).sum(1) / (nc * ns + eps)
+    loss = cos.pow(2).mean()
+    if not return_diagnostics:
+        return loss
+    return loss, {'abs_cos': cos.abs().detach(),
+                  'norm_a_c': nc.detach(), 'norm_a_s': ns.detach()}
