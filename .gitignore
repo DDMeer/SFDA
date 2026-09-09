@@ -11,3 +11,9 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# 特征缓存（可由 scripts/cache_features.py 重建）
+cache/
+
+# 源模型权重体积大（ResNet-50 约 100MB），不入库
+checkpoints/source/

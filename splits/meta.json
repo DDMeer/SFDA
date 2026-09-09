@@ -1,0 +1,71 @@
+{
+  "seed": 2024,
+  "val_fraction": 0.1,
+  "test_fraction": 0.1,
+  "usage": {
+    "train": "仅参数训练",
+    "val": "仅 checkpoint 选择",
+    "test": "留出集；不参与训练与模型选择；抗遗忘基线"
+  },
+  "classes": [
+    "dog",
+    "elephant",
+    "giraffe",
+    "guitar",
+    "horse",
+    "house",
+    "person"
+  ],
+  "domains": [
+    "art_painting",
+    "cartoon",
+    "photo",
+    "sketch"
+  ],
+  "splits": {
+    "art_painting": {
+      "source": "stratified_80/10/10_seed2024",
+      "n_train": 1638,
+      "n_val": 205,
+      "n_test": 205,
+      "sha256": {
+        "train": "f325a668c083",
+        "val": "f381de94c788",
+        "test": "ab64c8c9c6e6"
+      }
+    },
+    "cartoon": {
+      "source": "stratified_80/10/10_seed2024",
+      "n_train": 1874,
+      "n_val": 235,
+      "n_test": 235,
+      "sha256": {
+        "train": "2ca8c1b43884",
+        "val": "2dc46f564586",
+        "test": "9c265de73029"
+      }
+    },
+    "photo": {
+      "source": "stratified_80/10/10_seed2024",
+      "n_train": 1336,
+      "n_val": 167,
+      "n_test": 167,
+      "sha256": {
+        "train": "b5d4c0f4fbe1",
+        "val": "9522a170d17f",
+        "test": "e7f07ed7f52c"
+      }
+    },
+    "sketch": {
+      "source": "stratified_80/10/10_seed2024",
+      "n_train": 3143,
+      "n_val": 393,
+      "n_test": 393,
+      "sha256": {
+        "train": "e09233acddde",
+        "val": "dfe0959ae8a4",
+        "test": "05798d9f59ac"
+      }
+    }
+  }
+}
