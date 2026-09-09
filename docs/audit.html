@@ -1,0 +1,515 @@
+<title>纤维丛 SFDA 实现审计</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#F4F5F2; --surface:#FFFFFF; --surface-alt:#EAECE5; --surface-sunk:#E2E5DB;
+  --ink:#1B1E1A; --ink-mid:#454B41; --ink-mute:#6B7265; --rule:#D3D7CB;
+  --fiber:#2F5D45; --fiber-soft:#E2EBE4; --base:#B8862B; --base-soft:#F5EAD2;
+  --p0:#A33224; --p0-soft:#F7E3DF; --p1:#9A6F16; --p1-soft:#F6EBD4; --p2:#4F5A66; --p2-soft:#E5E9ED;
+  --ok:#2F5D45; --ok-soft:#DFEBE3;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131611; --surface:#1B1F19; --surface-alt:#222719; --surface-sunk:#0E110C;
+    --ink:#E4E7DE; --ink-mid:#BAC0B2; --ink-mute:#8A9182; --rule:#333A2E;
+    --fiber:#8CC4A2; --fiber-soft:#1E2C23; --base:#D9A94A; --base-soft:#2C2617;
+    --p0:#E5836F; --p0-soft:#2F1D18; --p1:#D9A94A; --p1-soft:#2C2617; --p2:#9AA8B6; --p2-soft:#1C2229;
+    --ok:#8CC4A2; --ok-soft:#1E2C23;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131611; --surface:#1B1F19; --surface-alt:#222719; --surface-sunk:#0E110C;
+  --ink:#E4E7DE; --ink-mid:#BAC0B2; --ink-mute:#8A9182; --rule:#333A2E;
+  --fiber:#8CC4A2; --fiber-soft:#1E2C23; --base:#D9A94A; --base-soft:#2C2617;
+  --p0:#E5836F; --p0-soft:#2F1D18; --p1:#D9A94A; --p1-soft:#2C2617; --p2:#9AA8B6; --p2-soft:#1C2229;
+  --ok:#8CC4A2; --ok-soft:#1E2C23;
+}
+
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;}
+.wrap{max-width:920px;margin:0 auto;padding:0 28px 120px;}
+.prose{max-width:70ch;}
+
+/* masthead */
+header.mast{padding:64px 0 34px;border-bottom:2px solid var(--ink);margin-bottom:44px;}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-mute);margin-bottom:22px;}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.2vw,44px);line-height:1.12;
+  margin:0 0 16px;text-wrap:balance;letter-spacing:-.015em;}
+.dek{font-size:17px;color:var(--ink-mid);max-width:62ch;margin:0;}
+.meta{display:flex;flex-wrap:wrap;gap:8px 26px;margin-top:26px;font-family:var(--mono);
+  font-size:11.5px;color:var(--ink-mute);}
+.meta b{font-weight:500;color:var(--ink-mid);}
+
+/* verdict panel */
+.verdict{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--p0);
+  padding:22px 26px;margin:0 0 52px;}
+.verdict h2{font-family:var(--sans);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--p0);margin:0 0 12px;font-weight:600;}
+.verdict p{margin:0 0 10px;}
+.verdict p:last-child{margin-bottom:0;}
+
+section{margin:0 0 56px;scroll-margin-top:20px;}
+.snum{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--fiber);
+  font-weight:500;margin-bottom:9px;}
+h2{font-family:var(--serif);font-weight:600;font-size:25px;line-height:1.25;margin:0 0 8px;
+  letter-spacing:-.01em;text-wrap:balance;}
+h2 + .lede{color:var(--ink-mid);margin:0 0 24px;max-width:66ch;}
+h3{font-family:var(--sans);font-weight:600;font-size:15.5px;margin:30px 0 10px;
+  letter-spacing:.005em;}
+p{margin:0 0 14px;}
+ul,ol{margin:0 0 16px;padding-left:22px;}
+li{margin-bottom:7px;}
+code{font-family:var(--mono);font-size:.875em;background:var(--surface-alt);
+  padding:1.5px 5px;border-radius:2px;}
+a{color:var(--fiber);text-decoration-thickness:1px;text-underline-offset:2px;}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--fiber);outline-offset:2px;}
+
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.6;background:var(--surface-sunk);
+  border:1px solid var(--rule);padding:16px 18px;overflow-x:auto;margin:0 0 20px;}
+pre code{background:none;padding:0;font-size:inherit;}
+
+/* tables */
+.tw{overflow-x:auto;margin:0 0 22px;border:1px solid var(--rule);background:var(--surface);}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:560px;}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  text-align:left;color:var(--ink-mute);font-weight:500;padding:11px 14px;
+  border-bottom:1px solid var(--rule);background:var(--surface-alt);white-space:nowrap;}
+td{padding:11px 14px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.55;}
+tr:last-child td{border-bottom:none;}
+td code{font-size:12px;}
+.mono-cell{font-family:var(--mono);font-size:12px;white-space:nowrap;}
+
+/* chips */
+.chip{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:500;
+  letter-spacing:.06em;padding:2px 7px;border-radius:2px;white-space:nowrap;}
+.c-full{background:var(--ok-soft);color:var(--ok);}
+.c-part{background:var(--p1-soft);color:var(--p1);}
+.c-miss{background:var(--p0-soft);color:var(--p0);}
+.c-p0{background:var(--p0-soft);color:var(--p0);}
+.c-p1{background:var(--p1-soft);color:var(--p1);}
+.c-p2{background:var(--p2-soft);color:var(--p2);}
+
+/* channel layout diagram */
+.chan{background:var(--surface);border:1px solid var(--rule);padding:20px 22px;margin:0 0 20px;}
+.chan-row{margin-bottom:20px;}
+.chan-row:last-child{margin-bottom:0;}
+.chan-label{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:8px;}
+.chan-label .n{font-family:var(--mono);font-size:12px;font-weight:500;}
+.chan-label .d{font-size:12.5px;color:var(--ink-mute);}
+.cells{display:flex;gap:3px;overflow-x:auto;padding-bottom:2px;}
+.cell{flex:0 0 34px;height:32px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:12px;font-weight:500;border-radius:2px;}
+.cell.s{background:var(--fiber);color:var(--bg);}
+.cell.c{background:var(--base);color:#1B1E1A;}
+.cell.z{background:var(--surface-sunk);color:var(--ink-mute);border:1px dashed var(--rule);}
+.split{flex:0 0 1px;background:var(--ink-mute);margin:0 5px;align-self:stretch;}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;color:var(--ink-mute);}
+.legend span{display:flex;align-items:center;gap:6px;}
+.sw{width:12px;height:12px;border-radius:2px;display:inline-block;}
+
+/* callouts */
+.note{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--fiber);
+  padding:15px 18px;margin:0 0 20px;font-size:14.5px;}
+.note.warn{border-left-color:var(--p0);}
+.note .t{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-mute);margin-bottom:7px;}
+.note p:last-child{margin-bottom:0;}
+
+/* roadmap */
+.rm{border:1px solid var(--rule);background:var(--surface);margin:0 0 26px;}
+.rm-head{display:flex;align-items:baseline;gap:12px;padding:14px 20px;
+  border-bottom:1px solid var(--rule);background:var(--surface-alt);flex-wrap:wrap;}
+.rm-head h3{margin:0;font-size:15px;}
+.rm-head .why{font-size:12.5px;color:var(--ink-mute);font-family:var(--mono);}
+.rm ol{margin:0;padding:16px 20px 18px 40px;}
+.rm li{margin-bottom:11px;font-size:14.5px;}
+.rm li:last-child{margin-bottom:0;}
+.rm li b{font-weight:600;}
+.rm li .f{font-family:var(--mono);font-size:11.5px;color:var(--ink-mute);display:block;margin-top:2px;}
+
+hr.div{border:none;border-top:1px solid var(--rule);margin:44px 0;}
+footer{border-top:2px solid var(--ink);padding-top:20px;margin-top:20px;
+  font-family:var(--mono);font-size:11.5px;color:var(--ink-mute);}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="kicker">实现审计 · 只读分析 · 未修改任何文件</div>
+  <h1>纤维丛 SFDA 实现审计</h1>
+  <p class="dek">把 <code>docs/research_idea.pdf</code> 的理论方案与 <code>fiber-rework</code> 分支的实际代码逐行对照，全部结论均以运行时验证为准，不采信 README 的表述。</p>
+  <div class="meta">
+    <span><b>仓库</b> SFDA @ fiber-rework (29a10f6)</span>
+    <span><b>范围</b> models/ scripts/ utils/ checkpoints/</span>
+    <span><b>方法</b> 静态阅读 + 张量追踪 + 权重检查</span>
+    <span><b>日期</b> 2026-09-08</span>
+  </div>
+</header>
+
+<div class="verdict">
+  <h2>总体判断</h2>
+  <p>提案的<strong>核心贡献目前没有任何一项被完整实现</strong>。已实现的只有 Stage 1 流模型的前向/逆向机制本身（经验证确实可逆）。纤维插值算子 <code>Z̄</code>、双流架构、生成器的风格条件注入、分类器再训练、抗遗忘评测——全部缺失。</p>
+  <p>更关键的是两个<strong>会使现有实验结论失效</strong>的问题：其一，四个下游脚本中有三个把 <code>z_s</code> 当成了 <code>z_c</code>（第 8 节有逐通道追踪证据）；其二，Stage 1 的训练目标在交换两组通道下<strong>完全对称</strong>，因此没有任何梯度信号决定哪一组是"风格"——即使把接线全部改对，"解耦"在当前目标函数下依然无法成立。</p>
+  <p>此外，全流程（Stage 1 训练、Stage 2 训练、Stage 3 演示）都只使用 <code>art_painting</code> 一个域，仓库中不存在任何跨域实验、任何分类器训练代码、任何准确率数字。</p>
+</div>
+
+<section>
+  <div class="snum">01 — 架构全景</div>
+  <h2>当前系统实际做了什么</h2>
+  <p class="lede">下图是从代码而非 README 还原的数据流。标 <code>✗</code> 处为实际接线与意图不符之处。</p>
+
+<pre><code>PACS art_painting  →  Resize(64×64), ToTensor  [0,1]，无 dequantization
+   │
+   ├─ Stage 1 ─ SimplifiedGlow
+   │     squeeze: 3×64×64 → 12×32×32
+   │     8 × [ Invertible1x1Conv(12) + AffineCoupling(12) ]
+   │     split:  z_s = ch[0:4]   z_c = ch[4:12]
+   │     loss = NLL + 5.0 · |Σ(∇ₓΣz_c ⊙ ∇ₓΣz_s)| / B      ✗ 对两组通道完全对称
+   │     → checkpoints/glow_stage1.pth   [已核验: 8 层, 12 通道]
+   │
+   ├─ Stage 2 ─ ConceptBridge  8192 → 1024 → 512 → 512
+   │     输入 = cat[ z_tensors[0], zeros ] = cat[ z_s , zeros ]   ✗ 应为 z_c
+   │     目标 = CLIP ViT-B/32 文本嵌入（使用真实标签，监督）
+   │     loss = MSE
+   │     → checkpoints/bridge_stage2.pth [已核验: net.1 = 1024×8192]
+   │
+   ├─ Stage 3 ─ Stable Diffusion v1.5 img2img
+   │     shadow = glow.reverse(zeros(8ch), z_s)                   ✗ 通道布局错乱
+   │     label  = argmax softmax(bridge(z) @ CLIP_text.T)         ✗ 缺 logit_scale
+   │     pipe(prompt=f"...{label}...", image=upscale(shadow,8×),
+   │          strength=0.45, guidance=8.5)                        ✗ z_s 从未进入生成器
+   │
+   └─ Stage 4 ─ find_hard_samples()   15 行残桩，无 import，从未被调用
+
+死代码（全仓库 0 处引用）:
+   models/mapping_net.py     StyleMapper        ← 本应是 z_s 注入生成器的接口
+   models/classifier.py      build_classifier   ← 本应是最终分类器
+   utils/jacobian_loss.py    compute_jacobian_alignment  ← 且 API 已失效
+</code></pre>
+</section>
+
+<section>
+  <div class="snum">02 — 文件逐一说明</div>
+  <h2>每个文件的职责与问题</h2>
+
+  <h3>models/</h3>
+  <div class="tw"><table>
+    <thead><tr><th>文件</th><th>内容</th><th>核验结果</th></tr></thead>
+    <tbody>
+      <tr><td class="mono-cell">glow_model.py</td>
+        <td><code>SqueezeLayer</code> / <code>Invertible1x1Conv</code> / <code>AffineCoupling</code> / <code>SimplifiedGlow</code></td>
+        <td>Squeeze 的正逆变换互为逆运算，已实测确认。1×1 卷积权重以 QR 正交初始化但作为自由参数训练，无正交约束，长训练可能趋于奇异。<code>slogdet</code> / <code>inv</code> 每次前向都强制搬到 CPU（MPS 不支持），造成同步阻塞。<code>reverse()</code> 不返回 logdet（无害）。</td></tr>
+      <tr><td class="mono-cell">mapping_net.py</td>
+        <td><code>StyleMapper</code>: z_s → 768 维</td>
+        <td><span class="chip c-miss">死代码</span> 且含潜在崩溃：默认 <code>img_size=64</code>，而 z_s 实际是 <code>[B,4,32,32]</code>（squeeze 后为 32×32）。若按默认构造，Linear 期望 16384 输入、实得 4096。另有空间错配见第 10 节。</td></tr>
+      <tr><td class="mono-cell">classifier.py</td>
+        <td>ResNet-50 + 新 fc</td>
+        <td><span class="chip c-miss">死代码</span> <code>pretrained=True</code> 在 torchvision 0.17 已弃用（仅告警）。提案中"用 ⟨X̂,Y⟩ 训练分类器"这一步完全没有对应的训练脚本。</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>scripts/</h3>
+  <div class="tw"><table>
+    <thead><tr><th>文件</th><th>问题</th></tr></thead>
+    <tbody>
+      <tr><td class="mono-cell">stage1_train_glow.py</td>
+        <td>无 dequantization（像素为 256 级离散值，NLL 无下界，模型可将密度堆在格点上作弊）；无 ActNorm；无 logit 变换；无验证集；每 epoch 覆盖保存同一 checkpoint；<code>DOMAIN</code> 硬编码；JA 损失见第 9 节。</td></tr>
+      <tr><td class="mono-cell">stage2_train_bridge.py</td>
+        <td>取到的是 <code>z_s</code> 而非 <code>z_c</code>（注释写着"提取 z_c (4通道)"，但模型返回顺序是 <code>z_s, z_c, log_det</code>）；对已归一化向量用 MSE（与余弦单调等价，但不如直接用余弦损失）；<strong>使用 <code>art_painting</code> 的真实标签监督训练</strong>，与 README "在缺失目标域标签的情况下"的说法矛盾。</td></tr>
+      <tr><td class="mono-cell">stage3_generate.py</td>
+        <td>z_c/z_s 完全对调；softmax 缺 <code>logit_scale</code>；每张图重新 <code>clip.load()</code>；四处 monkeypatch（<code>cached_download</code>、<code>device_mesh</code>、<code>torch.xpu</code>、<code>_torch_available</code>）绕过版本不兼容，脆弱；注释说"0.55 是黄金平衡点"但代码写 <code>strength=0.45</code>；shadow 从 64px 放大 8 倍到 512px，模糊到几乎不承载几何信息。</td></tr>
+      <tr><td class="mono-cell">stage4_active_al.py</td>
+        <td>无任何 import（<code>torch</code> 未定义）；<code>if entropy &gt; threshold</code> 对形状 <code>[B]</code> 的张量做布尔判断，B&gt;1 时直接抛 RuntimeError；收集的 <code>idx</code> 是 batch 序号而非样本全局索引。三处错误叠加，说明这段代码从未运行过。</td></tr>
+      <tr><td class="mono-cell">verify_stage1.py</td>
+        <td>解包错误导致 <code>reverse()</code> 参数含义反转；其 try/except "参数顺序兜底"永远不会触发，因为错误的调用通道数恰好也是 12，会静默成功。标题写 "Recon (zs=0)"，实际抹掉的是全部 content（第 8 节）。</td></tr>
+      <tr><td class="mono-cell">visualize_zc.py</td>
+        <td>可视化的 4 个通道是 <code>z_s</code>，标题却是 "$z_c$ (The Content Base)"。注释"z_c 是 outputs 中的第一个 4 维张量"是整个 bug 家族的源头。</td></tr>
+      <tr><td class="mono-cell">visual_verify.py</td>
+        <td><span class="chip c-full">唯一正确</span> 用 <code>z_s, z_c, _ = transform_to_noise(x)</code> 元组解包，<code>reverse(z_s, z_c)</code> 参数顺序也对。<code>verification_results/*.png</code> 是仓库中唯一可信的视觉证据。</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>其它</h3>
+  <ul>
+    <li><code>utils/jacobian_loss.py</code> — 三重失效：<code>z, _ = transform_to_noise(x)</code> 把 3 个返回值解包成 2 个会抛 ValueError；<code>model.reverse(z_perturbed)</code> 缺第二个参数会抛 TypeError；<code>split_dim=8</code> 把 ch[0:8] 当风格，与模型的 ch[0:4] 相矛盾。从未被 import。</li>
+    <li><code>requirements.txt</code> — 版本钉得完整且自洽（torch 2.2.2 / diffusers 0.27.0 / transformers 4.40.0 / numpy 1.26.4 避开 numpy 2 断裂 / CLIP 钉到具体 commit）。但 <code>huggingface_hub 0.36.2</code> 已移除 <code>cached_download</code>，这正是 Stage 3 需要 monkeypatch 的原因。</li>
+    <li><code>.gitignore</code> 排除 <code>data/</code>，且本地无 <code>data/</code> 目录 → 现有结果<strong>无法复现</strong>，需重新获取 PACS。</li>
+    <li><code>checkpoints/</code> — 两个权重均已加载核验，形状与代码定义一致。</li>
+    <li><code>results/</code> 2 张图（文件名含 <code>4864</code>），<code>verification_results/</code> 5 张对比图。README 给出的复现命令是 <code>--image data/art_painting/0/63.jpg</code>，与已提交结果的文件名不对应；README 展示的输入图 <code>demo/fig_3.jpg</code> 是一张长颈鹿<strong>照片</strong>，而命令声称来自 <code>art_painting</code> 域的 <code>0</code> 类目录（按代码自带的 <code>CLASS_MAP</code>，<code>0</code> = dog）。由于 <code>data/</code> 未入库，无法判定是目录标签有误还是文档与产物不匹配，但两者至少有一处不一致。</li>
+  </ul>
+</section>
+
+<section>
+  <div class="snum">03–06 — 提案对照</div>
+  <h2>提案组件 → 实现状态</h2>
+  <p class="lede">按提案给出的十一项组件逐条核对。"完整"指可端到端运行且语义正确。</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>提案组件</th><th>状态</th><th>依据</th></tr></thead>
+    <tbody>
+      <tr><td>可逆网络作为同胚映射载体</td><td><span class="chip c-part">部分</span></td>
+        <td>INN 存在且可逆，但建在<strong>像素空间</strong>而非提案图 3 明确的"源模型提取的特征"上；单流，无参数共享双流。</td></tr>
+      <tr><td>z_c / z_s 解耦</td><td><span class="chip c-part">部分</span></td>
+        <td>通道划分存在（4:8），但下游三处接反，且训练目标无法决定哪组是哪组（第 8、9 节）。</td></tr>
+      <tr><td>正交约束</td><td><span class="chip c-part">部分</span></td>
+        <td>存在一个 rank-1 代理损失，不等价于水平/垂直子空间正交（第 9 节）。</td></tr>
+      <tr><td>文本编码器提供语义基底</td><td><span class="chip c-part">部分</span></td>
+        <td>CLIP ViT-B/32 仅用于读出类别标签，未作为生成器的条件基底使用。</td></tr>
+      <tr><td>条件生成模型</td><td><span class="chip c-part">部分</span></td>
+        <td>SD1.5 img2img 已接通，但条件仅有一个文本字符串 + 一张模糊轮廓（第 10 节）。</td></tr>
+      <tr><td>纤维融合算子 <code>Z̄ = αZ_h + (1−α)Z_e + βΔ_Z</code></td><td><span class="chip c-miss">缺失</span></td>
+        <td>全仓库零实现（第 11 节）。</td></tr>
+      <tr><td>难/易样本双流划分</td><td><span class="chip c-miss">缺失</span></td>
+        <td>仅 stage4 残桩，无法运行，且未接入任何流程。</td></tr>
+      <tr><td>Δ_Z 噪声网络</td><td><span class="chip c-miss">缺失</span></td>
+        <td>无对应模块。</td></tr>
+      <tr><td>用 ⟨X̂, Y⟩ 训练分类器</td><td><span class="chip c-miss">缺失</span></td>
+        <td><code>build_classifier</code> 定义了但 0 处调用；无训练脚本。</td></tr>
+      <tr><td>抗遗忘</td><td><span class="chip c-miss">缺失</span></td>
+        <td>无源域保持率指标，无 before/after 对比，无基线。</td></tr>
+      <tr><td>跨域评测</td><td><span class="chip c-miss">缺失</span></td>
+        <td>Stage 1/2/3 全部只用 <code>art_painting</code>。</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <div class="t">结论</div>
+    <p><strong>完整实现：0 项。部分实现：5 项。缺失：6 项。</strong>目前完整可用的只有流模型的可逆机制本身，它是提案的基础设施，而非提案的贡献。</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">07–08 — 张量追踪</div>
+  <h2>z_c 与 z_s 在各阶段的真实去向</h2>
+  <p class="lede">以下布局由实际运行 <code>SimplifiedGlow</code> 并给通道打标记得出，不是静态推断。真实布局为 <code>ch[0:4] = z_s</code>、<code>ch[4:12] = z_c</code>。</p>
+
+  <div class="chan">
+    <div class="chan-row">
+      <div class="chan-label"><span class="n">visual_verify.py</span><span class="d">完整重构 · reverse(z_s, z_c)</span><span class="chip c-full">正确</span></div>
+      <div class="cells">
+        <div class="cell s">S</div><div class="cell s">S</div><div class="cell s">S</div><div class="cell s">S</div>
+        <div class="split"></div>
+        <div class="cell c">C</div><div class="cell c">C</div><div class="cell c">C</div><div class="cell c">C</div>
+        <div class="cell c">C</div><div class="cell c">C</div><div class="cell c">C</div><div class="cell c">C</div>
+      </div>
+    </div>
+
+    <div class="chan-row">
+      <div class="chan-label"><span class="n">期望的"影子底稿"</span><span class="d">抹掉风格、保留内容</span></div>
+      <div class="cells">
+        <div class="cell z">0</div><div class="cell z">0</div><div class="cell z">0</div><div class="cell z">0</div>
+        <div class="split"></div>
+        <div class="cell c">C</div><div class="cell c">C</div><div class="cell c">C</div><div class="cell c">C</div>
+        <div class="cell c">C</div><div class="cell c">C</div><div class="cell c">C</div><div class="cell c">C</div>
+      </div>
+    </div>
+
+    <div class="chan-row">
+      <div class="chan-label"><span class="n">stage3_generate.py</span><span class="d">实际产出的"影子底稿"</span><span class="chip c-miss">错误</span></div>
+      <div class="cells">
+        <div class="cell z">0</div><div class="cell z">0</div><div class="cell z">0</div><div class="cell z">0</div>
+        <div class="split"></div>
+        <div class="cell z">0</div><div class="cell z">0</div><div class="cell z">0</div><div class="cell z">0</div>
+        <div class="cell s">S</div><div class="cell s">S</div><div class="cell s">S</div><div class="cell s">S</div>
+      </div>
+    </div>
+
+    <div class="chan-row">
+      <div class="chan-label"><span class="n">verify_stage1.py</span><span class="d">图注写 "Recon (zs=0)"</span><span class="chip c-miss">语义完全反转</span></div>
+      <div class="cells">
+        <div class="cell s">S</div><div class="cell s">S</div><div class="cell s">S</div><div class="cell s">S</div>
+        <div class="split"></div>
+        <div class="cell z">0</div><div class="cell z">0</div><div class="cell z">0</div><div class="cell z">0</div>
+        <div class="cell z">0</div><div class="cell z">0</div><div class="cell z">0</div><div class="cell z">0</div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><i class="sw" style="background:var(--fiber)"></i> S = 真 z_s 的值</span>
+      <span><i class="sw" style="background:var(--base)"></i> C = 真 z_c 的值</span>
+      <span><i class="sw" style="background:var(--surface-sunk);border:1px dashed var(--rule)"></i> 0 = 置零</span>
+      <span>竖线 = 真实的 style/content 分界（ch4）</span>
+    </div>
+  </div>
+
+  <p>三处误用同源：<code>z_tensors = [t for t in outputs if t.dim()==4]</code> 这个"稳健解包"启发式取 <code>z_tensors[0]</code> 当 <code>z_c</code>，但 <code>transform_to_noise</code> 的返回顺序是 <code>(z_s, z_c, log_det)</code>，所以 <code>[0]</code> 永远是 <code>z_s</code>。</p>
+
+  <p>由此可确认：<strong>README 中 <code>demo/fig_1.png</code> 与 <code>demo/fig_2.png</code> 的图注都是错的</strong>——前者展示的是 z_s 通道而非"content base"，后者的 "Recon (zs=0)" 面板实际抹掉的是全部 content。<code>stage3</code> 的"影子底稿"则是内容被抹掉一半、另一半槽位被填入风格值的产物。</p>
+
+  <h3>Stage 2 的输入</h3>
+  <p><code>cat[z_tensors[0], zeros]</code> = <code>cat[z_s(4ch), zeros(4ch)]</code>。注意 Stage 2 与 Stage 3 的 bridge 输入构造方式<strong>彼此一致</strong>（都是"风格 + 零填充"），所以不存在训练/推理错配——bridge 只是从头到尾都在学一个错误的信号。</p>
+
+  <h3>其它一致性问题</h3>
+  <ul>
+    <li><strong>softmax 缺温度</strong>：<code>stage3</code> 对 <code>[-1,1]</code> 区间的余弦相似度直接取 softmax，未乘 CLIP 的 <code>logit_scale</code>（≈100）。用一组区分度良好的假想相似度复现，输出为 <code>0.1457 / 0.1386 / 0.1516 / …</code>，与 README 记录的 <code>0.1469 / 0.1343 / 0.1609 / …</code> 高度吻合。<strong>README 里那组"接近 1/7"的概率是温度缺失的产物，不能作为 bridge 失效的证据</strong>（argmax 不受温度影响）。bridge 实测并未坍缩：64 个差异极大的输入，输出两两余弦均值 0.59、有效秩 8。它的问题是输入错了，不是它学崩了。</li>
+    <li><strong>CLIP 空间不统一</strong>：概念空间用 ViT-B/32（512 维），而 SD1.5 的交叉注意力条件空间是 ViT-L/14（768 维）。目前只传字符串所以尚未爆雷，但提案要求"语义基底作为控制条件"，这一步必须先统一。<code>StyleMapper</code> 输出 768 维正是为此准备的，却与 512 维的 bridge 对不上。</li>
+    <li><strong>split_dim 矛盾</strong>：<code>jacobian_loss.py</code> 用 8:4（ch[0:8] 为风格），模型用 4:8（ch[0:4] 为风格），方向相反。</li>
+  </ul>
+</section>
+
+<section>
+  <div class="snum">09 — 正交性</div>
+  <h2>当前的正交损失对应几何正交吗？</h2>
+  <p class="lede">简短回答：不对应。它是一个秩为 1 的代理量，且无法区分风格与语义。</p>
+
+  <p>提案要求的是：在每一点 <code>e</code> 处 <code>T_eE = V_e ⊕ H_e</code> 在黎曼度量下正交。设可逆映射 <code>f: x ↦ (z_s, z_c)</code>，这是关于<strong>雅可比块</strong>的条件：</p>
+<pre><code>J_s = ∂z_s/∂x ∈ R^(4096 × 12288)
+J_c = ∂z_c/∂x ∈ R^(8192 × 12288)
+垂直 ⊥ 水平  ⟺  J_s G J_cᵀ = 0     （G 为 x 空间的度量）
+                 → 4096 × 8192 = 33,554,432 个标量约束</code></pre>
+
+  <p>代码实现的是：</p>
+<pre><code>grad_c = ∇ₓ (Σ z_c)      # = J_cᵀ · 1      形状 (B,3,64,64)，一个向量
+grad_s = ∇ₓ (Σ z_s)      # = J_sᵀ · 1      形状 (B,3,64,64)，一个向量
+loss   = |Σ(grad_c ⊙ grad_s)| / B  =  |1ᵀ J_c J_sᵀ 1| / B</code></pre>
+
+  <p>三个缺陷：</p>
+  <ol>
+    <li><strong>秩坍缩。</strong>两个雅可比都被全 1 向量收缩掉了，3355 万个约束只剩 1 个标量。实测梯度形状确认为 <code>(B,3,64,64)</code> 各一个向量。这只约束了一个方向上的相关性。</li>
+    <li><strong>符号抵消。</strong><code>abs</code> 在<strong>跨样本、跨像素求和之后</strong>才取，正负项可以互相抵消。损失为零不蕴含正交——对称噪声就能让它归零。应改为逐样本平方和或逐样本取绝对值再平均。</li>
+    <li><strong>角色对称。</strong><code>L(z_c, z_s) = L(z_s, z_c)</code>。而 NLL 对通道划分同样不变。因此 <strong>Stage 1 的整个目标函数在交换两组通道下完全不变</strong>——没有任何梯度告诉模型 ch[0:4] 应该是"风格"。这两个名字是纯粹的命名约定，背后没有训练信号。</li>
+  </ol>
+
+  <div class="note warn">
+    <div class="t">这是最根本的问题</div>
+    <p>第 3 点独立于所有接线 bug。<strong>即使把第 8 节的三处误用全部修正，当前目标函数下的"解耦"依然不成立</strong>，因为没有任何东西把类别信息推进 z_c。必须引入一项打破对称性的、只作用于 z_c 的语义损失（例如把 CLIP 对齐或分类头与 Stage 1 联合训练）。</p>
+  </div>
+
+  <p>另外，代码中没有指定任何度量 <code>G</code>，隐含使用像素空间的欧氏内积——所以提案里的"黎曼度量"目前不承担任何计算内容。<code>utils/jacobian_loss.py</code> 里的随机投影版本方向是对的（能解决缺陷 1、部分解决 2），但它已失效且未被调用。正确的估计量是：</p>
+<pre><code>E_{v,w~N(0,I)} [ ((J_sᵀ v) · (J_cᵀ w))² ]     # 用 vjp 估计
+   = ‖J_c J_sᵀ‖_F² 的无偏估计 —— 正是块正交条件本身</code></pre>
+</section>
+
+<section>
+  <div class="snum">10 — 生成器条件</div>
+  <h2>生成器真的以 z_s 为条件吗？</h2>
+  <p class="lede">没有。<code>grep</code> 确认 z_s 从未到达 <code>pipe()</code>。</p>
+
+  <p>传入 SD pipeline 的全部内容只有三项：</p>
+  <ul>
+    <li><code>prompt</code> — <code>f"a realistic high-quality photo of a {label}, cinematic lighting, 8k, highly detailed"</code>。它对隐变量的依赖只经过一个 argmax 标签，信息量 log₂7 ≈ <strong>2.8 bit</strong>。</li>
+    <li><code>image</code> — 64×64 的重构图放大 8 倍到 512×512，极度模糊。</li>
+    <li><code>strength=0.45, guidance_scale=8.5</code> — 常数。</li>
+  </ul>
+
+  <p>风格在流程中被<strong>置零移除，之后从未重新注入</strong>。因此当前管线的本质是"内容 → 类别标签 → 通用照片 prompt"，属于<strong>基于提示词的域随机化</strong>，而不是提案所说的纤维受控生成。<code>StyleMapper</code>（本应是 z_s 的注入接口）存在但零引用，且带有第 2 节的形状缺陷和第 8 节的 512/768 空间错配。</p>
+
+  <div class="note">
+    <div class="t">信息瓶颈</div>
+    <p>整套几何计算的产物，最终被压缩成 (a) 2.8 bit 的类别标签 和 (b) 一张 8 倍上采样的 64px 模糊图。在这个配置下，"生成数据保留了底流形语义"这一主张<strong>在原理上就无法被检验</strong>——因为几乎没有几何信息传递到生成器。</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">11 — 纤维插值</div>
+  <h2>纤维插值/扰动实现了吗？</h2>
+  <p class="lede">没有。<code>α</code>、<code>β</code>、任何两样本之间的插值，全仓库零实现。</p>
+
+  <p>最接近的两处都在 <code>visual_verify.py</code>，且都在任何训练路径之外：</p>
+<pre><code>x_style_up    = model.reverse(z_s * 1.5, z_c)          # 单样本风格的标量缩放
+z_s_random    = torch.randn_like(z_s) * 0.3
+x_random_style = model.reverse(z_s_random, z_c)        # 用噪声整体替换风格</code></pre>
+
+  <p>两者都不是"两个样本风格之间的插值"。仓库中不存在 <code>z_s1</code>/<code>z_s2</code> 的配对逻辑、不存在难/易样本划分、不存在 Δ 网络、不存在 β 系数。而且这两行的输出只被存成一张 PNG 网格，<strong>从未用于生成训练数据</strong>。</p>
+
+  <p>对照提案：<code>Z̄ = αZ_h^s + (1−α)Z_e^s + βΔ_Z</code> 是整个可计算方案的核心创新，它的实现度为 0。</p>
+</section>
+
+<section>
+  <div class="snum">12 — 实验充分性</div>
+  <h2>现有实验能支撑哪些主张？</h2>
+
+  <div class="tw"><table>
+    <thead><tr><th>待支撑主张</th><th>仓库中的证据</th><th>充分？</th></tr></thead>
+    <tbody>
+      <tr><td>语义/风格解耦</td>
+        <td><code>verification_results/</code> 5 张定性对比图，来自 1–2 张图片；README 的 fig_1 / fig_2 图注错误（展示的是 z_s）</td>
+        <td><span class="chip c-miss">否</span> 无任何定量指标（无互信息、无 swap test、无线性探针），样本量 n≈2，且目标函数本身无法指派角色</td></tr>
+      <tr><td>域不变性</td>
+        <td>无。全部脚本只出现 <code>art_painting</code></td>
+        <td><span class="chip c-miss">否</span> 从未运行过任何跨域实验</td></tr>
+      <tr><td>域泛化</td>
+        <td>无。仓库中不存在分类器训练代码，不存在任何准确率数字</td>
+        <td><span class="chip c-miss">否</span></td></tr>
+      <tr><td>抗遗忘</td>
+        <td>无。无源域保持率、无 before/after、无基线方法</td>
+        <td><span class="chip c-miss">否</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>另有实验效度问题</h3>
+  <ul>
+    <li><strong>训练/评测同域且用了标签。</strong>Stage 2 在 <code>data/art_painting</code> 上<strong>用真实标签</strong>监督训练 bridge，而 Stage 3 的演示图也取自 <code>data/art_painting</code>。README 展示的"语义识别"很可能是在训练集内的预测，不构成任何泛化证据；README 声称的"在缺失目标域标签的情况下"与代码不符。</li>
+    <li><strong>不可复现。</strong><code>data/</code> 被 gitignore 且本地缺失；无随机种子；无数据获取脚本；无验证集划分；超参散落在各脚本的硬编码常量里。</li>
+    <li><strong>无基线。</strong>作为 SFDA 工作，仓库中没有任何对照方法（SHOT / NRC / AaD / 基于 CLIP 的 SFDA 等）的实现或引用。</li>
+  </ul>
+</section>
+
+<hr class="div">
+
+<section>
+  <div class="snum">13 — 路线图</div>
+  <h2>按优先级的修复与建设顺序</h2>
+
+  <div class="rm">
+    <div class="rm-head"><span class="chip c-p0">P0</span><h3>正确性与根本性问题</h3><span class="why">不解决则现有全部结论无效</span></div>
+    <ol>
+      <li><b>统一 z_s / z_c 的解包方式。</b>把四个脚本改为 <code>z_s, z_c, log_det = transform_to_noise(x)</code> 元组解包，删除 <code>t.dim()==4</code> 启发式。随后必须<strong>重训 bridge</strong> 并<strong>重新生成 README 的所有配图</strong>。
+        <span class="f">stage2_train_bridge.py · stage3_generate.py · verify_stage1.py · visualize_zc.py</span></li>
+      <li><b>打破 Stage 1 目标函数的通道对称性。</b>这是解耦能否成立的前提。最小可行方案：把 CLIP 语义对齐（或一个分类头）作为只作用于 z_c 的损失项，与 Stage 1 联合训练，让梯度真正把类别信息推进 z_c。
+        <span class="f">stage1_train_glow.py</span></li>
+      <li><b>修正正交损失。</b>改为 Hutchinson 随机投影 + 逐样本平方，估计 <code>‖J_c J_sᵀ‖_F²</code>；同时修复或删除 <code>jacobian_loss.py</code>（含其矛盾的 <code>split_dim=8</code>）。
+        <span class="f">stage1_train_glow.py · utils/jacobian_loss.py</span></li>
+      <li><b>修正实验协议。</b>Stage 1/2 在<strong>源域</strong>训练，在<strong>另一个目标域</strong>评测。当前全流程同域，不构成 SFDA 设定。</li>
+      <li><b>补 softmax 温度。</b>用 <code>clip_model.logit_scale.exp()</code>，否则打印的诊断概率恒为近似均匀，无诊断价值。
+        <span class="f">stage3_generate.py:100</span></li>
+      <li><b>流模型规范化。</b>加入 dequantization 与 ActNorm（或明确声明 NLL 数值不具可比性）；给 1×1 卷积加正交约束防奇异。</li>
+      <li><b>修复或删除 Stage 4 残桩。</b>补 import、改为逐样本掩码、记录全局索引。</li>
+      <li><b>订正 README。</b>fig_1 / fig_2 的图注、"无目标域标签"的表述、复现命令与已提交产物文件名的不一致。</li>
+    </ol>
+  </div>
+
+  <div class="rm">
+    <div class="rm-head"><span class="chip c-p1">P1</span><h3>撑起一篇可辩护论文的最小实现与实验</h3><span class="why">缺任一项都会被直接质疑</span></div>
+    <ol>
+      <li><b>把 INN 迁到源模型特征空间。</b>这是提案图 3 本来就写明的方案：在 ResNet-50 倒数第二层的 2048 维特征上做向量 INN，无需 squeeze，计算量大幅下降，且特征本身已语义化，z_c 才有可依附的信号。</li>
+      <li><b>实现参数共享的双流 INN</b> + 基于熵的难/易样本划分。</li>
+      <li><b>实现融合算子</b> <code>Z̄ = αZ_h + (1−α)Z_e + βΔ_Z</code>，<code>α</code> 建议按 Beta 分布采样而非固定值，<code>Δ_Z</code> 由一个小噪声网络产生。</li>
+      <li><b>让 Z̄ 真正进入生成器。</b>修好 <code>StyleMapper</code> 的 <code>img_size</code>，并统一语义空间（把读出端换成 ViT-L/14，使 512/768 两个空间合一）。</li>
+      <li><b>训练分类器。</b>用 <code>⟨X̂, Y⟩</code>，<code>build_classifier</code> 已经写好只是从未被调用。</li>
+      <li><b>建立评测套件</b>（当前 100% 缺失）：
+        <ul style="margin-top:6px">
+          <li>PACS 四域留一，目标域准确率 vs. source-only 基线</li>
+          <li>抗遗忘：适应前后的源域准确率（backward transfer）</li>
+          <li>解耦定量：从 z_c 与从 z_s 分别做类别线性探针（应为高 vs. 接近随机）；域探针应呈相反模式；风格交换测试</li>
+          <li>消融：去正交约束 / 去插值(β=0) / 去 Δ_Z / 去文本条件</li>
+        </ul></li>
+      <li><b>补齐可复现性。</b>随机种子、数据获取脚本、验证集划分、配置文件替代硬编码常量。</li>
+      <li><b>接入至少两个 SFDA 基线</b>用于对照。</li>
+    </ol>
+  </div>
+
+  <div class="rm">
+    <div class="rm-head"><span class="chip c-p2">P2</span><h3>方法论与理论强度</h3><span class="why">决定这是"又一个解耦方法"还是有独特论点</span></div>
+    <ol>
+      <li><b>让"垂直"这一主张可证伪。</b>在真实域对上测量 <code>ρ = E[‖P_V(f_t − f_s)‖ / ‖f_t − f_s‖]</code>。这一个数字就能把纤维丛叙事从定义变成可检验假设，而且成本极低。目前的论证是"把域偏移定义为垂直运动，再推出底流形不变"，是恒等式而非定理。</li>
+      <li><b>把 Δ_Z 投影到垂直子空间。</b>否则扰动会离开纤维、改变语义，<code>⟨X̂, Y⟩</code> 沿用原标签就失去理论依据。这是一条能把几何直接翻译成损失项的具体改动。</li>
+      <li><b>正视局部平凡性。</b>固定通道划分的 INN 实现的是<strong>全局平凡丛</strong>，而提案正文写的是"局部同胚"。要么改用条件耦合层/局部图册，要么测量<strong>和乐</strong>（让风格沿域回路输运一圈，测返回误差）并把它作为丛是否平凡的证据。这是目前最有分量的差异化点。</li>
+      <li><b>明确度量 g。</b>若就是欧氏度量，直说并去掉"黎曼"二字；若要它承担内容，用拉回度量（Fisher / 分类器诱导），这同时会改变正交损失的形式。</li>
+      <li><b>正面处理可辨识性。</b>明确声明 B 由文本嵌入子流形锚定，这正是提供可辨识性的归纳偏置（可引 Locatello 等的不可能性结果）。</li>
+      <li><b>防范伪标签污染。</b>SFDA 中难样本的伪标签本就不可靠，其风格特征可能混入内容，需在 Z_h 的使用上加置信度门控。</li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  审计基于 fiber-rework @ 29a10f6 · 所有张量布局结论经实际运行验证 · 本次未修改任何文件
+</footer>
+
+</div>
