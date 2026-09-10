@@ -106,3 +106,53 @@ def probe_representation(name, splits, num_classes, seed=0, **kw):
              n_train=len(splits['train'][1]), n_val=len(splits['val'][1]),
              n_test=len(splits['test'][1]))
     return r
+
+
+class FrozenProbe:
+    """已拟合并冻结的探针：Standardizer + 线性分类器 + 选定的 L2 强度。
+
+    用于 robustness 分析——只重采样 test 子集，复用**同一个**冻结探针评估，
+    从而单独度量 test 采样方差，而不把训练随机性与超参选择混进来。
+    """
+
+    def __init__(self, standardizer, linear, best_wd):
+        self.st, self.lin, self.best_wd = standardizer, linear, best_wd
+        self.lin.eval()                       # 真正冻结，防误用
+        for prm in self.lin.parameters():
+            prm.requires_grad_(False)
+        # Standardizer 在 train 上 fit 之后即固定，无需额外处理
+
+    @torch.no_grad()
+    def accuracy(self, x, y):
+        x = self.st(x.detach().cpu().float())
+        return self.lin(x).argmax(1).eq(y.cpu()).float().mean().item()
+
+
+def fit_probe(name, splits, num_classes, seed=0,
+              weight_decays=(1e-4, 1e-3, 1e-2, 1e-1, 1.0), steps=500, lr=1.0):
+    """拟合探针并**同时返回冻结对象**，供 robustness 复用。
+
+    协议与 linear_probe 相同：超参搜索只用 train/val，test 在 best_wd 固定后
+    只评估一次。
+    """
+    sp = {k: (v[0].detach().cpu().float(), v[1].cpu()) for k, v in splits.items()}
+    st = Standardizer().fit(sp['train'][0])              # 统计量只来自 train
+    xs = {k: (st(v[0]), v[1]) for k, v in sp.items()}
+
+    best_wd, best_va, search = None, -1.0, []
+    for wd in weight_decays:                              # 阶段 1：不触碰 test
+        lin = _fit_linear(xs['train'][0], xs['train'][1], num_classes, wd, steps, lr, seed)
+        tr_a = _acc(lin, xs['train'][0], xs['train'][1])
+        va_a = _acc(lin, xs['val'][0], xs['val'][1])
+        search.append({'wd': wd, 'train': tr_a, 'val': va_a})
+        if va_a > best_va:
+            best_wd, best_va = wd, va_a
+
+    lin = _fit_linear(xs['train'][0], xs['train'][1], num_classes, best_wd, steps, lr, seed)
+    res = dict(name=name, dim=sp['train'][0].shape[1], best_weight_decay=best_wd,
+               train=_acc(lin, xs['train'][0], xs['train'][1]),
+               val=_acc(lin, xs['val'][0], xs['val'][1]),
+               test=_acc(lin, xs['test'][0], xs['test'][1]),   # 唯一一次 test 评估
+               n_train=len(sp['train'][1]), n_val=len(sp['val'][1]),
+               n_test=len(sp['test'][1]), search=search)
+    return res, FrozenProbe(st, lin, best_wd)
