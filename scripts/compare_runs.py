@@ -39,7 +39,7 @@ from utils.probe_splits import PROBE_DOMAINS, build_category_probe_split
 from utils.target_cache import TargetFeatures
 from utils.stage1_losses import style_removal_ratio, tangent_orthogonality
 from scripts.validate_stage1 import load_frozen_inn, extract
-from scripts.validate_stage1_followup import class_conditional_domain
+from utils.representation_eval import class_conditional_domain
 from scripts.train_source import get_device
 
 DIAG_SEED = 999999
@@ -48,7 +48,11 @@ CHANCE_DOMAIN = 1.0 / len(PROBE_DOMAINS)
 
 
 def category_probes(inn, dev, source, target, seed):
-    """Acc(y | f / z_c / z_s)，f 作为线性可分性上界参考。"""
+    """Acc(y | f / z_c / z_s)。
+
+    f 是**类别线性可分性的参考基线**，不是上界：z_c=g_c(f) 是非线性变换后的
+    表征，完全可能在线性探针上超过 f（实测 89.36% > 88.51%）。
+    """
     idx, (feat, gt, _) = build_category_probe_split(source, target)
     zc, zs = extract(inn, feat, dev)
     out = {}
