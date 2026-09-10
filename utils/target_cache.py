@@ -77,10 +77,18 @@ class TargetFeatures:
         return self.feature[self.hard_mask]
 
     def iter_batches(self, batch_size, shuffle=True, generator=None, drop_last=False):
-        """按批产出 (feature, is_hard, index)，全部已在 self.device 上。"""
+        """按批产出 (feature, is_hard, index)，全部已在 self.device 上。
+
+        ⚠️ 排列必须在 **CPU** 上生成后再搬到设备：PyTorch 2.2.2 的 MPS 实现下
+           torch.randperm 会忽略 generator 并直接返回恒等排列 [0..n-1]，导致
+           shuffle 静默失效。generator 请传 CPU 上的 torch.Generator。
+           （实测 MPS 的 randn/rand 正常，只有 randperm 有此缺陷。）
+        """
         n = len(self)
-        order = (torch.randperm(n, generator=generator, device=self.feature.device)
-                 if shuffle else torch.arange(n, device=self.feature.device))
+        if shuffle:
+            order = torch.randperm(n, generator=generator).to(self.feature.device)
+        else:
+            order = torch.arange(n, device=self.feature.device)
         for i in range(0, n, batch_size):
             idx = order[i:i + batch_size]
             if drop_last and idx.numel() < batch_size:

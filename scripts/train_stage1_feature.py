@@ -44,11 +44,13 @@ def set_all_seeds(seed):
 
 
 def ckpt_name(a):
-    """checkpoint 命名：只写入已计划做消融的项（n_c、λ_orth、seed）。
+    """checkpoint 命名：只写入已计划做消融的项（n_c、λ_orth、seed）+ 可选 run tag。
 
     n_blocks/steps 等当前固定的配置不进文件名，完整配置存在 checkpoint 内。
+    run tag 用于保留历史运行做 A/B 对照，绝不覆盖既有 checkpoint。
     """
-    return f'{a.source}__{a.target}__nc{a.n_c}_lo{a.lambda_orth:g}_s{a.seed}.pth'
+    tag = f'_{a.run_tag}' if a.run_tag else ''
+    return f'{a.source}__{a.target}__nc{a.n_c}_lo{a.lambda_orth:g}_s{a.seed}{tag}.pth'
 
 
 def evaluate(inn, C, ds, dev, seed=DIAG_DIR_SEED, n_orth=256):
@@ -105,6 +107,8 @@ def main():
     ap.add_argument('--log-every', type=int, default=50)
     ap.add_argument('--seed', type=int, default=2024)
     ap.add_argument('--no-save', action='store_true')
+    ap.add_argument('--run-tag', default='', help='运行标签，写进文件名以保留历史运行')
+    ap.add_argument('--comparison-parent', default='', help='用于 A/B 对照的父 checkpoint 名')
     args = ap.parse_args()
 
     set_all_seeds(args.seed)
@@ -136,8 +140,9 @@ def main():
     print(fmt('before', before) + '\n')
 
     opt = torch.optim.Adam(inn.parameters(), lr=args.lr)
-    data_gen = torch.Generator(device=dev); data_gen.manual_seed(args.seed)  # 确定性 batch 顺序
-    dir_gen = torch.Generator(device=dev)                                    # 逐步确定性切方向
+    # batch 顺序的 RNG 必须在 CPU：MPS 的 randperm 会忽略 generator 并返回恒等排列
+    data_gen = torch.Generator(); data_gen.manual_seed(args.seed)
+    dir_gen = torch.Generator(device=dev)      # 切方向用 MPS randn，实测正常
 
     step, t0 = 0, time.time()
     while step < args.steps:
@@ -200,6 +205,9 @@ def main():
                               'n_easy': int(ds.easy_mask.sum()),
                               'n_hard': int(ds.hard_mask.sum()),
                               'rule': 'median predictive entropy (target-only)'},
+            'batch_shuffle_backend': 'cpu_randperm',
+            'run_tag': args.run_tag,
+            'comparison_parent': args.comparison_parent,
             'source_meta': src_meta,
             'target_cache_meta': ds.meta,
             'metrics': {'before': before, 'after': after},
