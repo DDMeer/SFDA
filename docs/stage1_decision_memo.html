@@ -1,0 +1,237 @@
+<title>域不变性裁定备忘</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#F5F6F3; --surface:#FFFFFF; --alt:#EBEDE8; --sunk:#E3E6DF;
+  --ink:#191C19; --mid:#464C45; --mute:#6C7269; --rule:#D4D8CE;
+  --pine:#2F5D45; --pine-soft:#E3EBE5;
+  --amber:#A8701A; --amber-soft:#F6EBD8;
+  --clay:#A33224; --clay-soft:#F7E4E0;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141714; --surface:#1C201B; --alt:#232821; --sunk:#0F120F;
+  --ink:#E5E8E2; --mid:#BBC1B7; --mute:#8A9186; --rule:#333A30;
+  --pine:#8CC4A2; --pine-soft:#1E2C23;
+  --amber:#D9A24A; --amber-soft:#2C2617;
+  --clay:#E5836F; --clay-soft:#2F1D18;
+}}
+:root[data-theme="dark"]{
+  --bg:#141714; --surface:#1C201B; --alt:#232821; --sunk:#0F120F;
+  --ink:#E5E8E2; --mid:#BBC1B7; --mute:#8A9186; --rule:#333A30;
+  --pine:#8CC4A2; --pine-soft:#1E2C23;
+  --amber:#D9A24A; --amber-soft:#2C2617;
+  --clay:#E5836F; --clay-soft:#2F1D18;
+}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;
+  line-height:1.68;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:880px;margin:0 auto;padding:0 26px 110px;}
+
+header{padding:58px 0 0;}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--mute);margin-bottom:18px;}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(29px,5vw,42px);line-height:1.12;
+  margin:0 0 14px;letter-spacing:-.015em;text-wrap:balance;}
+.dek{font-size:16.5px;color:var(--mid);max-width:60ch;margin:0;}
+.meta{display:flex;flex-wrap:wrap;gap:6px 24px;margin-top:22px;padding-bottom:26px;
+  border-bottom:2px solid var(--ink);font-family:var(--mono);font-size:11.5px;color:var(--mute);}
+.meta b{font-weight:500;color:var(--mid);}
+
+/* recommendation — memos lead with the ask */
+.rec{margin:34px 0 46px;background:var(--amber-soft);border:1px solid var(--amber);
+  border-left-width:4px;padding:24px 26px;}
+.rec .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--amber);font-weight:500;margin-bottom:10px;}
+.rec p{font-family:var(--serif);font-size:22px;line-height:1.35;margin:0 0 10px;font-weight:500;}
+.rec .sub{font-family:var(--sans);font-size:14.5px;color:var(--mid);margin:0;}
+
+section{margin:0 0 46px;}
+h2{font-family:var(--serif);font-weight:600;font-size:22px;margin:0 0 6px;letter-spacing:-.008em;}
+h2 + .lede{color:var(--mid);margin:0 0 20px;max-width:64ch;font-size:14.5px;}
+p{margin:0 0 13px;}
+ul{margin:0 0 14px;padding-left:20px;} li{margin-bottom:6px;}
+code{font-family:var(--mono);font-size:.87em;background:var(--alt);padding:1.5px 5px;border-radius:2px;}
+
+/* evidence strip */
+.ev{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin:0 0 20px;}
+.ev>div{background:var(--surface);padding:15px 16px;}
+.ev .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;color:var(--mute);
+  margin-bottom:7px;line-height:1.4;}
+.ev .v{font-family:var(--mono);font-size:23px;font-weight:500;font-variant-numeric:tabular-nums;
+  line-height:1.1;}
+.ev .n{font-size:12px;color:var(--mute);margin-top:5px;line-height:1.45;}
+.good{color:var(--pine);} .bad{color:var(--clay);} .hold{color:var(--amber);}
+
+.facts li{margin-bottom:9px;}
+.facts b{font-weight:600;}
+
+/* questions */
+.q{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--amber);
+  padding:18px 22px;margin:0 0 14px;}
+.q .id{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--amber);
+  letter-spacing:.06em;margin-bottom:7px;}
+.q .txt{font-size:15.5px;margin:0 0 12px;}
+.q .ev2{font-family:var(--mono);font-size:12.5px;color:var(--mid);background:var(--sunk);
+  padding:9px 12px;border-radius:2px;line-height:1.65;overflow-x:auto;}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--rule);background:var(--surface);margin:0 0 18px;}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:520px;}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  text-align:left;color:var(--mute);font-weight:500;padding:11px 14px;background:var(--alt);
+  border-bottom:1px solid var(--rule);}
+td{padding:11px 14px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.55;}
+tr:last-child td{border-bottom:none;}
+td.mono{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+.guard{background:var(--clay-soft);border:1px solid var(--clay);border-left-width:3px;
+  padding:18px 22px;}
+.guard .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--clay);font-weight:500;margin-bottom:9px;}
+.guard ul{margin-bottom:0;columns:2;column-gap:32px;}
+@media(max-width:560px){.guard ul{columns:1;}}
+
+footer{border-top:1px solid var(--rule);padding-top:18px;font-family:var(--mono);
+  font-size:11.5px;color:var(--mute);line-height:1.7;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">决策备忘 · 需作者裁定</div>
+  <h1>域不变性裁定备忘</h1>
+  <p class="dek">Stage 1 的可逆解耦已完成并验证。类别侧达到预期，域侧没有。继续进入 Stage 2 之前，提案中有四处欠定需要作者定夺。</p>
+  <div class="meta">
+    <span><b>项目</b> 基于域不变量解耦的抗遗忘跨域迁移</span>
+    <span><b>依据</b> docs/research_idea.pdf</span>
+    <span><b>实验</b> art_painting → cartoon</span>
+    <span><b>日期</b> 2026-09-09</span>
+  </div>
+</header>
+
+<div class="rec">
+  <div class="lbl">最终建议</div>
+  <p>暂停 Stage 2，直至作者澄清 Q1–Q4。</p>
+  <p class="sub">工程缺陷已排除，实验问题已定位。接下来不是「怎么调参」，而是「提案到底要求什么」——继续推进等同于我们替提案补写定义。</p>
+</div>
+
+<section>
+  <h2>关键实验结果</h2>
+  <p class="lede">全部在修复 MPS shuffle 缺陷后的正确协议下测得。域探针为类别条件版本：每个 probe 内真实类别恒定，不存在类别／域混淆。</p>
+
+  <div class="ev">
+    <div>
+      <div class="k">类别探针 Acc(y | z_c)</div>
+      <div class="v good">89.36%</div>
+      <div class="n">冻结源特征 f 为 88.51%，配对自助不可区分 → z_c <b>类别充分</b></div>
+    </div>
+    <div>
+      <div class="k">类别探针 Acc(y | z_s)</div>
+      <div class="v hold">31.5–38.3%</div>
+      <div class="n">随机基线 14.29%，CI 整体高于基线 → z_s <b>尚非 category-free</b></div>
+    </div>
+    <div>
+      <div class="k">类别条件域探针 Acc(d | z_c, y)</div>
+      <div class="v bad">99.66%</div>
+      <div class="n">随机基线 33.33% → z_c <b>并非域不变</b></div>
+    </div>
+    <div>
+      <div class="k">该值在 λ<sub>orth</sub>=0/25/50 下</div>
+      <div class="v bad">不变</div>
+      <div class="n">macro 三档一致，7 个类别逐项相同</div>
+    </div>
+  </div>
+
+  <div class="tw"><table>
+    <thead><tr><th>λ<sub>orth</sub></th><th>L_orth</th><th>｜cos｜</th><th>Acc(y｜z_c)</th><th>Acc(y｜z_s)</th><th>Acc(d｜z_c,y)</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">0</td><td class="mono">3.431e-03</td><td class="mono">0.04682</td><td class="mono">88.51%</td><td class="mono">34.89%</td><td class="mono">99.66%</td></tr>
+      <tr><td class="mono">25</td><td class="mono">2.272e-04</td><td class="mono">0.01110</td><td class="mono">89.36%</td><td class="mono">31.49%</td><td class="mono">99.66%</td></tr>
+      <tr><td class="mono">50</td><td class="mono">1.494e-04</td><td class="mono">0.00942</td><td class="mono">88.51%</td><td class="mono">38.30%</td><td class="mono">99.66%</td></tr>
+    </tbody>
+  </table></div>
+
+  <p><b>这一行对照是整份备忘的核心：</b>正交强度变化 23 倍、夹角余弦变化 5 倍，而 <code>z_c</code> 的域可预测性一位不动。即：<b>几何正交在当前实现中不足以确立域不变性。</b></p>
+</section>
+
+<section>
+  <h2>已确立的事实</h2>
+  <ul class="facts">
+    <li><b>z_c 是类别充分的</b> —— 与冻结源特征 f 不可区分</li>
+    <li><b>正确 shuffle 大幅降低了 z_s 的类别泄漏</b> —— 80.43% → 31.49%；此前的严重泄漏主要由错误的类别聚集 batch 顺序放大（MPS 上 <code>randperm</code> 忽略 generator 并返回恒等排列）</li>
+    <li><b>z_s 仍保留显著的类别信息</b> —— 尚不能称为 category-free</li>
+    <li><b>z_c 在固定类别条件下仍强域可预测</b>，且与正交强度无关</li>
+    <li><b>几何正交对 λ<sub>orth</sub> 响应强烈</b> —— 该损失本身工作正常</li>
+  </ul>
+  <p style="color:var(--mid);font-size:14.5px">⚠️ 这不等于整个提案被证伪。融合算子 <code>Z̄</code>、文本语义基底、条件生成模型、<code>⟨X̂,Y⟩</code> 分类器重训均尚未实现。</p>
+</section>
+
+<section>
+  <h2>需要裁定的四个问题</h2>
+  <p class="lede">每个问题只附最小必要证据。这些是提案中无法由文本自行推断的欠定步骤。</p>
+
+  <div class="q">
+    <div class="id">Q1</div>
+    <p class="txt">Stage 1 本身是否被要求产出<b>域不变</b>的 z_c？</p>
+    <div class="ev2">Acc(d | z_c, y) = 99.66%，λ_orth = 0 / 25 / 50 三档不变<br>随机基线 33.33%</div>
+  </div>
+
+  <div class="q">
+    <div class="id">Q2</div>
+    <p class="txt">「施加正交化约束以确保解耦的彻底性」在计算上究竟指什么？切空间正交是否<b>按定义</b>即足够，还是原意包含更强的统计独立性？</p>
+    <div class="ev2">L_orth 变化 23×，|cos| 变化 5×<br>而域可预测性一位不动</div>
+  </div>
+
+  <div class="q">
+    <div class="id">Q3</div>
+    <p class="txt">风格融合开始前，z_s 是否必须是 <b>category-free</b>？若是，预期的可测判据是什么？</p>
+    <div class="ev2">Acc(y | z_s) = 31.49% – 38.30%<br>随机基线 14.29%，bootstrap CI 整体高于基线</div>
+  </div>
+
+  <div class="q">
+    <div class="id">Q4</div>
+    <p class="txt">后续的风格融合／文本条件／生成，是仅仅<b>使用</b>这个分解，还是也被期望<b>创造或精炼</b>语义-风格的角色分离？</p>
+    <div class="ev2">图 3 中 z_c 无显式下游计算边<br>融合算子用「模拟」沿纤维滑移；语义被称为「完备保留的」（前提假设而非机制）</div>
+  </div>
+</section>
+
+<section>
+  <h2>答复后的分支</h2>
+  <p class="lede">仅列忠于提案的路径。任何新增机制都需另行标记为方法学变更。</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:38%">若作者认为</th><th>则</th></tr></thead>
+    <tbody>
+      <tr><td>Stage 1 必须已使 z_c 域不变</td><td>当前 Stage 1 为 <b>NO-GO</b>；提案需先澄清缺失的可计算机制，之后才进 Stage 2</td></tr>
+      <tr><td>切空间正交本身即所意图的解耦定义</td><td>需指出当前表征在几何上正交、在统计上非域不变；作者须裁定「绝对域不变量空间」这一理论主张是否应当弱化</td></tr>
+      <tr><td>Stage 2/3 意在精炼角色分离</td><td>可以 <b>GO</b>，但须<b>事先</b>定义什么下游诊断能证明该精炼确实发生</td></tr>
+      <tr><td>z_s 无需 category-free</td><td>须澄清文本类别条件如何避免与携带类别信息的风格隐变量发生语义冲突</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="guard">
+    <div class="lbl">我们不能自行决定的事项</div>
+    <ul>
+      <li>梯度反转 / 域对抗训练</li>
+      <li>互信息惩罚</li>
+      <li>对比损失</li>
+      <li>信息瓶颈</li>
+      <li>新增分类器或新目标函数</li>
+      <li>重新定义「域不变性」</li>
+      <li>弱化「绝对域不变量空间」</li>
+    </ul>
+    <p style="margin:12px 0 0;font-size:14px;color:var(--mid)">以上均属作者层面的方法学变更，<code>research_idea.pdf</code> 中并不存在。引入任何一项都会把这项研究变成另一个方法。</p>
+  </div>
+</section>
+
+<footer>
+  Stage 1 实现与验证代码已提交；结果 JSON 与 checkpoint 待作者裁定后一并入库。<br>
+  历史的坏 shuffle checkpoint 保留作 A/B 对照基线。
+</footer>
+
+</div>
