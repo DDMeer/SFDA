@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stage 1 角色可辨识性诊断</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#f3f4f6; --surface:#ffffff; --ink:#131820; --ink2:#4d5762; --ink3:#77828e;
+  --line:#d8dce2; --line2:#e8eaee;
+  --zc:#0d7168; --zs:#9c5c07; --warn:#9e2c36; --ok:#2c6a3d; --neutral:#8a949e;
+  --track:#e3e6ea;
+  --serif:"IBM Plex Serif",Georgia,"Songti SC",serif;
+  --sans:"IBM Plex Sans",-apple-system,"PingFang SC",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1116; --surface:#151b22; --ink:#e4e9ef; --ink2:#98a4b0; --ink3:#6d7884;
+    --line:#252d36; --line2:#1d242c;
+    --zc:#4cb8ab; --zs:#d99a4e; --warn:#d9737d; --ok:#6dbe87; --neutral:#727d88;
+    --track:#222932;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1116; --surface:#151b22; --ink:#e4e9ef; --ink2:#98a4b0; --ink3:#6d7884;
+  --line:#252d36; --line2:#1d242c;
+  --zc:#4cb8ab; --zs:#d99a4e; --warn:#d9737d; --ok:#6dbe87; --neutral:#727d88;
+  --track:#222932;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15.5px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:64px 28px 96px}
+header{border-bottom:2px solid var(--ink);padding-bottom:20px;margin-bottom:36px}
+.kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink3);margin-bottom:14px}
+h1{font-family:var(--serif);font-weight:600;font-size:31px;line-height:1.2;margin:0 0 10px;
+  text-wrap:balance;letter-spacing:-.01em}
+.sub{color:var(--ink2);font-size:15px;margin:0}
+h2{font-family:var(--serif);font-weight:600;font-size:20px;margin:52px 0 6px;
+  text-wrap:balance;letter-spacing:-.005em}
+h2 .n{font-family:var(--mono);font-size:12px;color:var(--ink3);font-weight:500;
+  display:block;letter-spacing:.1em;margin-bottom:7px}
+h3{font-family:var(--sans);font-weight:600;font-size:15.5px;margin:28px 0 4px}
+p{margin:10px 0}
+.lede{font-size:17px;line-height:1.6}
+code,.m{font-family:var(--mono);font-size:.905em}
+code{background:var(--line2);padding:.1em .34em;border-radius:2px}
+.zc{color:var(--zc);font-weight:600}
+.zs{color:var(--zs);font-weight:600}
+.verdict{background:var(--surface);border:1px solid var(--line);border-left:none;
+  padding:22px 24px;margin:26px 0 0}
+.verdict p{margin:0}
+.verdict .big{font-family:var(--serif);font-size:19px;line-height:1.45;font-weight:500}
+.verdict .small{margin-top:12px;color:var(--ink2);font-size:14.5px}
+
+/* evidence list */
+.ev{border-top:1px solid var(--line);padding:20px 0 4px;display:grid;
+  grid-template-columns:56px 1fr;gap:0 18px;align-items:start}
+.ev .tag{font-family:var(--mono);font-size:12px;color:var(--ink3);letter-spacing:.06em;
+  padding-top:3px}
+.ev h3{margin:0 0 6px}
+.ev p{margin:6px 0;color:var(--ink2);font-size:14.5px}
+.ev .body{min-width:0}
+
+/* metric bars */
+.bars{margin:12px 0 4px;display:flex;flex-direction:column;gap:7px}
+.bar{display:grid;grid-template-columns:170px 1fr 64px;gap:12px;align-items:center;
+  font-size:13.5px}
+.bar .lbl{font-family:var(--mono);font-size:12.5px;color:var(--ink2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .val{font-family:var(--mono);font-size:12.5px;text-align:right;
+  font-variant-numeric:tabular-nums;font-weight:500}
+.track{position:relative;height:9px;background:var(--track);overflow:visible}
+.fill{height:100%;background:var(--neutral)}
+.fill.c{background:var(--zc)} .fill.s{background:var(--zs)}
+.fill.f{background:var(--ink2)}
+.tick{position:absolute;top:-3px;bottom:-3px;width:1.5px;background:var(--ink);opacity:.55}
+.tick::after{content:attr(data-l);position:absolute;top:-15px;left:-2px;
+  font-family:var(--mono);font-size:9.5px;color:var(--ink3);white-space:nowrap;opacity:1}
+
+/* tables */
+.scroll{overflow-x:auto;margin:14px 0 6px;border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;
+  font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:8px 12px;white-space:nowrap;border-bottom:1px solid var(--line2)}
+th:first-child,td:first-child{text-align:left;font-family:var(--mono);font-size:12.5px}
+thead th{font-family:var(--sans);font-weight:600;font-size:12px;color:var(--ink3);
+  letter-spacing:.03em;border-bottom:1px solid var(--line)}
+tbody tr:last-child td{border-bottom:none}
+td.num{font-family:var(--mono);font-size:12.5px}
+tr.chance td{color:var(--ink3);font-style:normal}
+tr.key td{font-weight:600}
+.hi{color:var(--warn);font-weight:600}
+caption{caption-side:bottom;text-align:left;font-size:12.5px;color:var(--ink3);
+  padding:9px 0 0;line-height:1.5}
+
+/* term analysis */
+.term{border-left:2px solid var(--line);padding:2px 0 2px 18px;margin:18px 0}
+.term .name{font-family:var(--mono);font-size:13.5px;font-weight:600;color:var(--ink)}
+.term p{margin:5px 0;color:var(--ink2);font-size:14.5px}
+.term .verdict-line{color:var(--warn);font-weight:500}
+
+ul{padding-left:20px;margin:10px 0}
+li{margin:6px 0;color:var(--ink2);font-size:14.5px}
+li strong{color:var(--ink)}
+.note{font-size:13px;color:var(--ink3);line-height:1.6;border-top:1px solid var(--line);
+  margin-top:52px;padding-top:18px}
+.note b{color:var(--ink2);font-weight:600}
+.closing{font-weight:500}
+
+@media print{
+  /* 避免结论块、证据条目与表格被页面底部截断 */
+  .wrap{padding:0 0 24px;max-width:none}
+  .ev,.term,.verdict,.note,.scroll,table,li,.closing,h2{break-inside:avoid;page-break-inside:avoid}
+  h2,h3{break-after:avoid;page-break-after:avoid}
+  .closing{break-before:auto;orphans:3;widows:3}
+  p{orphans:3;widows:3}
+  body{background:#fff;color:#000;font-size:12.5px}
+}
+</style>
+</head>
+<body style="margin:0">
+
+<div class="wrap">
+<header>
+  <div class="kicker">SFDA · fiber-rework · art_painting → cartoon</div>
+  <h1>为什么当前 Stage 1 没有实现语义／风格解耦</h1>
+  <p class="sub">对 Experiment 1–6B 的证据汇总与根因判断。只做诊断，不提出新的 architecture 或 loss。</p>
+</header>
+
+<p class="lede">把七组证据串起来之后，问题不在「<span class="zc">z_c</span> 泄漏了域信息」这一个症状上，
+而在更上游：<strong>当前 Stage 1 的角色指派是 under-identified 的</strong>——目标函数没有任何一项
+把「域信息应当落在哪一支」这个自由度固定下来。</p>
+
+<div class="verdict">
+  <p class="big">几何正交、latent 位置切分、分支线性可读性，三者都不等价于语义／风格解耦。</p>
+  <p class="small">对<strong>完整 latent</strong> <span class="m">z = [z_c, z_s]</span> 而言，
+  <span class="m">g</span> 是双射、相对 <span class="m">f</span> 保持信息，因此在这一层面上
+  「让线性探针失败」度量的是可读性而非信息含量。
+  但<strong>分支抽取</strong> <span class="m">z ↦ z_c</span> 或 <span class="m">z ↦ z_s</span>
+  本身是非可逆的，可能丢信息——这一论断不能推广到单支探针。</p>
+</div>
+
+<h2><span class="n">证据</span>七组观测</h2>
+
+<div class="ev">
+  <div class="tag">E1</div>
+  <div class="body">
+    <h3>正交约束可调，域泄漏纹丝不动</h3>
+    <p>λ<sub>orth</sub> ∈ {0, 25, 50} 三档：<code>L_orth</code> 变化 23×，<code>|cos|</code> 变化 5×，
+    而 <code>Acc(d|z_c,y)</code> 三档<strong>完全相同</strong>。</p>
+    <div class="bars">
+      <div class="bar"><span class="lbl">λ=0　Acc(d|z_c,y)</span>
+        <span class="track"><span class="fill c" style="width:99.66%"></span><span class="tick" style="left:33.33%" data-l="chance 33.3%"></span></span>
+        <span class="val">99.66%</span></div>
+      <div class="bar"><span class="lbl">λ=25 Acc(d|z_c,y)</span>
+        <span class="track"><span class="fill c" style="width:99.66%"></span><span class="tick" style="left:33.33%"></span></span>
+        <span class="val">99.66%</span></div>
+      <div class="bar"><span class="lbl">λ=50 Acc(d|z_c,y)</span>
+        <span class="track"><span class="fill c" style="width:99.66%"></span><span class="tick" style="left:33.33%"></span></span>
+        <span class="val">99.66%</span></div>
+    </div>
+    <p>沿 λ 移动改变了目标函数里被约束的那个几何量，却没有改变角色分配。
+    这在经验上支持<strong>被优化的几何量与统计域角色分配之间存在错配</strong>；
+    它是 under-identification 的证据之一，但不是数学证明。</p>
+  </div>
+</div>
+
+<div class="ev">
+  <div class="tag">E2</div>
+  <div class="body">
+    <h3>两支都几乎完美编码域</h3>
+    <p>类别条件域探针（每个探针内真实类别恒定，不存在类别／域混淆），macro 平均，chance 33.33%：</p>
+    <div class="bars">
+      <div class="bar"><span class="lbl">Acc(d|z_c,y)</span>
+        <span class="track"><span class="fill c" style="width:99.66%"></span><span class="tick" style="left:33.33%" data-l="chance"></span></span>
+        <span class="val">99.66%</span></div>
+      <div class="bar"><span class="lbl">Acc(d|z_s,y)</span>
+        <span class="track"><span class="fill s" style="width:99.32%"></span><span class="tick" style="left:33.33%"></span></span>
+        <span class="val">99.32%</span></div>
+      <div class="bar"><span class="lbl">Acc(d|f,y)</span>
+        <span class="track"><span class="fill f" style="width:98.84%"></span><span class="tick" style="left:33.33%"></span></span>
+        <span class="val">98.84%</span></div>
+      <div class="bar"><span class="lbl">Acc(d|z_c_unit,y)</span>
+        <span class="track"><span class="fill c" style="width:99.66%"></span><span class="tick" style="left:33.33%"></span></span>
+        <span class="val">99.66%</span></div>
+      <div class="bar"><span class="lbl">仅用 ‖z_c‖</span>
+        <span class="track"><span class="fill" style="width:77.82%"></span><span class="tick" style="left:33.33%"></span></span>
+        <span class="val">77.82%</span></div>
+    </div>
+    <p>幅度对于近乎完美的线性域可分性<strong>不是必需的</strong>：
+    <code>z_c/‖z_c‖</code> 仍有 99.66%。与此同时，仅凭范数也已达到 77.82%，
+    所以幅度本身同样携带可观的域信号。两者都成立，不是二选一。</p>
+  </div>
+</div>
+
+<div class="ev">
+  <div class="tag">E3</div>
+  <div class="body">
+    <h3>类别信息确实集中在 z_c——但这本身不构成解耦</h3>
+    <div class="bars">
+      <div class="bar"><span class="lbl">Acc(y|f)</span>
+        <span class="track"><span class="fill f" style="width:88.51%"></span><span class="tick" style="left:14.29%" data-l="chance 14.3%"></span></span>
+        <span class="val">88.51%</span></div>
+      <div class="bar"><span class="lbl">Acc(y|z_c)</span>
+        <span class="track"><span class="fill c" style="width:89.36%"></span><span class="tick" style="left:14.29%"></span></span>
+        <span class="val">89.36%</span></div>
+      <div class="bar"><span class="lbl">Acc(y|z_s)</span>
+        <span class="track"><span class="fill s" style="width:31.49%"></span><span class="tick" style="left:14.29%"></span></span>
+        <span class="val">31.49%</span></div>
+    </div>
+    <p><span class="zs">z_s</span> 的 31.49% 明显高于 14.29% 的随机水平，不能称为「接近随机」。
+    <code>L_sem</code> 做到的是让 <span class="zc">z_c</span> 对类别<strong>充分</strong>，而充分不蕴含最小充分。</p>
+  </div>
+</div>
+
+<div class="ev">
+  <div class="tag">E4</div>
+  <div class="body">
+    <h3>域信息在两支中都是高维、线性冗余的</h3>
+    <p>迭代零空间投影（每轮在 train split 上重新拟合域方向，残差化后并入累计正交基，
+    始终从原始表征投影）：</p>
+    <div class="scroll"><table>
+      <thead><tr><th>分支</th><th>轮数</th><th>移除独立方向</th><th>占该支维数</th>
+        <th>终点 Acc(d|·,y)</th><th>终点 Acc(y|·)</th></tr></thead>
+      <tbody>
+        <tr><td><span class="zc">z_c</span> (1536)</td><td class="num">22</td><td class="num">308</td>
+          <td class="num">20.1%</td><td class="num">37.82%</td><td class="num">79.57%</td></tr>
+        <tr><td><span class="zs">z_s</span> (512)</td><td class="num">8</td><td class="num">112</td>
+          <td class="num">21.9%</td><td class="num">36.13%</td><td class="num">27.66%</td></tr>
+        <tr class="chance"><td>chance</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>
+          <td class="num">33.33%</td><td class="num">14.29%</td></tr>
+      </tbody>
+    </table></div>
+    <p>域方向不是少数几条：要把探针压到接近随机，两支都得移除约五分之一的坐标维数。
+    绝对秩上 <span class="zs">z_s</span> 更紧凑（112 vs 308），但相对比例两者接近（21.9% vs 20.1%）。</p>
+  </div>
+</div>
+
+<div class="ev">
+  <div class="tag">E5</div>
+  <div class="body">
+    <h3>两条稳定的定向干预没有改善独立域探针</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>干预</th><th>λ</th><th>protocol</th><th>稳定性</th>
+        <th>Acc(d|z_c,y)</th><th>Acc(y|z_c)</th></tr></thead>
+      <tbody>
+        <tr><td>显式域混淆</td><td class="num">0.01</td><td style="text-align:left">oracle，非 source-free</td>
+          <td style="text-align:left">稳定</td><td class="num">99.66%</td><td class="num">88.09%</td></tr>
+        <tr><td>teacher-gated 角度不变性</td><td class="num">0.5</td><td style="text-align:left">strict SFDA</td>
+          <td style="text-align:left">稳定</td><td class="num">99.66%</td><td class="num">87.23%</td></tr>
+        <tr class="key"><td>基线</td><td class="num">—</td><td style="text-align:left">—</td>
+          <td style="text-align:left">稳定</td><td class="num">99.66%</td><td class="num">89.36%</td></tr>
+        <tr><td>GRL 域对抗</td><td class="num">1.0</td><td style="text-align:left">oracle，非 source-free</td>
+          <td style="text-align:left"><span class="hi">发散</span></td>
+          <td class="num" style="color:var(--ink3)">未评估</td><td class="num" style="color:var(--ink3)">未评估</td></tr>
+      </tbody>
+      <caption>两条<b>稳定</b>的干预都没有改善独立域探针。GRL 那一行<b>不能与前两条并列</b>：
+      该 run 在记录中被标为 <code>failed_run</code> / adversarial divergence，
+      当时即判定不得用于表征对比，因此<b>没有记录任何表征指标</b>。</caption>
+    </table></div>
+    <p>GRL 的发散证据：往返误差 1.618e-04（阈值 1e-5 的 16 倍）、语义一致率 85.96% → 18.30%、
+    <code>L_flow</code> −0.44 → 173.81、<code>z_c</code> 标准差 1.27 → 21.41。
+    在表征本身已被破坏的情况下，域探针的任何变化都无法区分「域信息被移除」与「表征被摧毁」，
+    所以它不构成一次干净的 effectiveness comparison。</p>
+    <p>E4 为「简单的局部／分支级压力可能不足」提供了一个<strong>合理的解释</strong>：
+    线性可恢复的域结构分布在很多方向上。但这些实验<strong>并没有确立</strong>
+    「维数」就是上述目标失败的因果原因。</p>
+  </div>
+</div>
+
+<div class="ev">
+  <div class="tag">E6</div>
+  <div class="body">
+    <h3>删掉某一支的域子空间，不降低重建特征的域可分性</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>变体</th><th>Acc(d|f,y)</th><th>Acc(y|f)</th><th>冻结分类器一致率</th>
+        <th>相对位移 mean</th><th>cosine</th></tr></thead>
+      <tbody>
+        <tr><td>f_orig</td><td class="num">98.84%</td><td class="num">88.51%</td><td class="num">100.00%</td><td class="num">0.0000</td><td class="num">1.0000</td></tr>
+        <tr><td>f_−c</td><td class="num">98.38%</td><td class="num">85.96%</td><td class="num">40.61%</td><td class="num">0.5608</td><td class="num">0.8367</td></tr>
+        <tr><td>f_−s</td><td class="num">98.50%</td><td class="num">89.36%</td><td class="num">98.87%</td><td class="num">0.1063</td><td class="num">0.9933</td></tr>
+        <tr class="key"><td>f_−cs</td><td class="num hi">80.63%</td><td class="num">85.96%</td><td class="num">40.55%</td><td class="num">0.5744</td><td class="num">0.8281</td></tr>
+        <tr class="chance"><td>chance</td><td class="num">33.33%</td><td class="num">14.29%</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+      </tbody>
+    </table>
+    <caption>单删任一支后，重建特征的域可分性几乎不变。准确表述是：
+    <b>单个 latent 分支内线性域可分性的下降，不蕴含重建回特征空间后线性域可分性的下降</b>——
+    投影本身显然是迁移了的（f_−c 的相对位移已达 0.5608）。</caption>
+    </div>
+    <p>f_−c 值得单列：冻结源分类器一致率掉到 40.61%，但新拟合的类别探针仍读出 85.96%。
+    即 intervention 相对于冻结分类器原有的决策边界大幅改变了特征几何，
+    而类别信息仍可被一个新拟合的线性探针恢复。</p>
+  </div>
+</div>
+
+<div class="ev">
+  <div class="tag">E7</div>
+  <div class="body">
+    <h3>线性可读性强烈依赖坐标系</h3>
+    <div class="scroll"><table>
+      <thead><tr><th></th><th>joint latent Acc(d|·,y)</th><th>reconstructed f Acc(d|·,y)</th>
+        <th>joint latent Acc(y|·)</th><th>reconstructed f Acc(y|·)</th></tr></thead>
+      <tbody>
+        <tr><td>orig</td><td class="num">99.66%</td><td class="num">98.84%</td><td class="num">87.66%</td><td class="num">88.51%</td></tr>
+        <tr><td>−c</td><td class="num">99.66%</td><td class="num">98.38%</td><td class="num">81.28%</td><td class="num">85.96%</td></tr>
+        <tr><td>−s</td><td class="num">99.66%</td><td class="num">98.50%</td><td class="num">86.81%</td><td class="num">89.36%</td></tr>
+        <tr class="key"><td>−cs</td><td class="num hi">43.51%</td><td class="num hi">80.63%</td><td class="num">80.85%</td><td class="num">85.96%</td></tr>
+        <tr class="chance"><td>chance</td><td class="num">33.33%</td><td class="num">33.33%</td><td class="num">14.29%</td><td class="num">14.29%</td></tr>
+      </tbody>
+      <caption>单支残差 <span class="zc">z_c⁻</span> = 37.82%、<span class="zs">z_s⁻</span> = 36.13%；
+      拼接只带来小幅提升（→ 43.51%），而重建到特征空间伴随大得多的提升（→ 80.63%）。</caption>
+    </table></div>
+    <p>这里比较的是<strong>完整 latent</strong> 与其重建特征：<code>g⁻¹</code> 在
+    <code>[z_c⁻, z_s⁻]</code> 与 <code>f_−cs</code> 之间是双射，两者携带<strong>完全相同</strong>的信息。
+    （E4 的单支结果不享有这一保证——分支抽取是非可逆的。）因此这 37.12 pt 不是信息增加，
+    而是<strong>在同一线性探针协议下</strong>由坐标系变化带来的可读性差异。</p>
+    <p>同一现象在类别上也出现——每一路 joint latent 的 <code>Acc(y|·)</code> 都低于对应的重建特征。
+    所以这不是 domain 专有的机制，不应包装成 domain-specific。</p>
+  </div>
+</div>
+
+<h2><span class="n">根因 · 其一</span>目标函数里没有任何一项约束角色分配</h2>
+
+<div class="term">
+  <div class="name">L_flow = mean_b(0.5‖z_b‖² − logdet_b) / dim</div>
+  <p>对完整的 <code>z = [z_c, z_s]</code> 做联合标准高斯建模——该项在计算中把两支重新拼接，
+  根本不引用切分本身；加之标准正态先验旋转不变，<code>L_flow</code>
+  <strong>完全不区分</strong>哪些坐标被称作 <span class="zc">z_c</span>。</p>
+  <p class="verdict-line">对 semantic/domain 统计角色分配的显式约束：无。</p>
+</div>
+
+<div class="term">
+  <div class="name">L_sem = KL( C(f) ‖ C(g⁻¹(z_c, 0)) )</div>
+  <p>鼓励 <span class="zc">z_c</span> 对类别<strong>充分</strong>。该项<strong>不含任何针对
+  <span class="zc">z_c</span> 中域信息的显式惩罚</strong>，因此既不保证域不变性，也不保证最小充分性。</p>
+  <p>但「没有显式排斥压力」<strong>不等于</strong>「域信息对该项零影响」——
+  域相关的变化完全可能经由 <code>g⁻¹(z_c, 0)</code> 间接改变 <code>C(·)</code> 的输出，从而抬高 KL。</p>
+  <p class="verdict-line">对 semantic/domain 统计角色分配的显式约束：无。</p>
+</div>
+
+<div class="term">
+  <div class="name">L_orth = E[ cos²(a_c, a_s) ]</div>
+  <p>其中 <code>a_c</code>、<code>a_s</code> 是经由逆映射诱导出的<strong>随机抽样切向量</strong>。
+  它是 horizontal/vertical 切空间正交性的一个 <strong>stochastic proxy</strong>——
+  实现中并不计算完整的 Jacobian 分块，因此<strong>不能</strong>确立精确的矩阵恒等式
+  <code>J_c J_sᵀ = 0</code>。目前观察到的是较低的随机切向余弦与较大的 principal angles。</p>
+  <p>而核心判断不依赖这一区分：低切向余弦／几何正交<strong>不蕴含统计独立</strong>。
+  E1 是相应的实验证据——<code>L_orth</code> 改变 23×，域分配毫无变化。</p>
+  <p>几何约束仍可能<strong>间接</strong>影响学到的表征，但它不告诉模型
+  <span class="zc">z_c</span> → semantic、<span class="zs">z_s</span> → domain/style 这种统计角色。</p>
+  <p class="verdict-line">对 semantic/domain 统计角色分配的显式约束：无。</p>
+</div>
+
+<p>三项相加之后，仍然没有任何一项对 <span class="zc">z_c</span> 中的域信息施加<strong>显式</strong>压力。
+现有目标函数允许多种具有不同角色分配的解；结合目标函数的结构与当前的实验结果，
+「哪类统计信息进入哪一支」这一自由度<strong>没有被充分识别</strong>
+（The current objective admits solutions with different statistical role assignments; both its
+structure and the observed experiments indicate that this degree of freedom is insufficiently
+identified）。因此结论不是「我们证明了 disentanglement 不可能」，也不是「INN 一定不适合」，而是：
+<strong>当前的目标函数不足以识别所期望的 semantic/style 角色</strong>。</p>
+
+<h2><span class="n">根因 · 其二</span>双射带来的结构性限制</h2>
+
+<ul>
+  <li><strong>在完整 latent 这一层，双射不销毁信息，只重新分配可读性。</strong>
+  对 <code>f ↔ z = [z_c, z_s]</code>，以「某个线性探针失败」定义的解耦目标度量的是可读性而非信息含量。
+  E7 把它量化了：同样的信息换一个坐标系，线性域精度差 37.12 pt。
+  <br><span style="color:var(--ink3)">需要限定的是：<code>z ↦ z_c</code>、<code>z ↦ z_s</code>
+  是非可逆的分支抽取，可能丢信息，因此单支探针上的结论不受这条保护。</span></li>
+  <li><strong>底空间投影与 style-zero 重建是不同的数学对象。</strong>
+  提案中的 π: E → B 返回的是一个<strong>底空间对象</strong>，<code>π(e) ∈ B</code>；
+  而 <code>g⁻¹(z_c, 0)</code> 返回的是 <code>E</code> 中一个<strong>选定的代表元</strong>，
+  <code>g⁻¹(z_c, 0) ∈ E</code>。它的行为是「取一个 section 的代表元」，
+  而不是实现 bundle projection 本身——两者甚至不在同一个空间里。</li>
+  <li><strong>「位置切分」不等于「信息切分」。</strong>
+  前 n_c 个坐标叫 <span class="zc">z_c</span> 是一个约定；没有任何一项目标函数把信息分区
+  对齐到这个坐标分区上。</li>
+</ul>
+
+<h2><span class="n">判断</span>可以正式保留的结论</h2>
+
+<ol>
+  <li><span class="zc">z_c</span> 与 <span class="zs">z_s</span> 各自都包含很强的域信息（E2）。</li>
+  <li>移除各自已识别的线性域判别子空间后，单支接近随机，而两者拼接仍略高于随机：
+    <span class="m">z_c⁻ 37.82% · z_s⁻ 36.13% · joint 43.51%</span>（E4、E7）。</li>
+  <li>重建特征 <code>f_−cs</code> 的线性域可分性高得多：<span class="m">80.63%</span>（E6）。</li>
+  <li>由于逆映射是双射，这并不意味着产生了新的域信息；它表明<strong>线性可分性强烈依赖表示／坐标系</strong>（E7）。</li>
+  <li>同一现象不为 domain 独有：joint latent 的类别精度同样一致地低于对应的重建特征精度（E7）。</li>
+  <li>因此，几何正交与分支线性探针都不是充分的解耦判据；当前 INN 的角色指派 under-identified（E1，并与 E5 的两条稳定干预结果一致）。</li>
+</ol>
+
+<p class="closing">这些结果促使我们在继续添加正则项之前，
+先重新审视<strong>角色识别机制</strong>本身。</p>
+
+<div class="note">
+  <p><b>Protocol 标注。</b> Experiment 1 / 2 为 oracle、<b>非 source-free</b> 的探索性诊断（适配过程中读取了源域 art 特征）；
+  Experiment 3 为 strict SFDA；Experiment 4B / 5 / 6 / 6B 为只读 oracle 机制诊断，
+  其 rank 终点的选择参考了先前的 oracle 诊断曲线（每轮的基只由 train split 拟合）。
+  这些指标整体属于 exploration diagnostic，<b>不是未触碰的 test</b>。
+  仍然完全保留的是：photo 与 sketch <b>作为适配目标</b>及其端任务精度。</p>
+  <p><b>健康度读法。</b> intervention 后 flow NLL 的下降不是健康证据——
+  其中大部分是 latent prior energy 由 1.3326 降至 0.6765 的算术后果，logdet 几乎未动（2.2191 → 2.0976）。</p>
+  <p><b>仍待作者决定。</b> decision memo 中的 Q1–Q4 尚未回答，Stage 2 保持暂停。本页只做诊断，
+  不提出新的 architecture、objective 或 parameterization。</p>
+</div>
+</div>
+</body>
+</html>
