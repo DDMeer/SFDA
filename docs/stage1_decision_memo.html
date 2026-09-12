@@ -97,26 +97,41 @@ td.mono{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nu
 footer{border-top:1px solid var(--rule);padding-top:18px;font-family:var(--mono);
   font-size:11.5px;color:var(--mute);line-height:1.7;}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+
+/* 作者裁定 */
+.ruling{margin:14px 0 0;padding:13px 15px;background:var(--pine-soft);
+  border-left:3px solid var(--pine);}
+.ruling .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--pine);font-weight:600;margin-bottom:6px;}
+.ruling p{margin:0;font-size:14.5px;color:var(--ink);line-height:1.6;}
+.ruling p + p{margin-top:7px;color:var(--mid);}
+.ruling .verdict{font-weight:600;}
+tr.inforce td{background:var(--pine-soft);}
+tr.inforce td:first-child::before{content:"▸ 生效　";font-family:var(--mono);
+  font-size:10.5px;color:var(--pine);letter-spacing:.08em;}
 </style>
 
 <div class="wrap">
 
 <header>
-  <div class="eyebrow">决策备忘 · 需作者裁定</div>
+  <div class="eyebrow">决策备忘 · 作者已裁定 2026-09-11</div>
   <h1>域不变性裁定备忘</h1>
-  <p class="dek">Stage 1 的可逆解耦已完成并验证。类别侧达到预期，域侧没有。继续进入 Stage 2 之前，提案中有四处欠定需要作者定夺。</p>
+  <p class="dek">Stage 1 的可逆解耦已完成并验证。类别侧达到预期，域侧没有。提案中的四处欠定已由作者裁定，
+  结论记录于下方各问题的「作者裁定」栏。</p>
   <div class="meta">
     <span><b>项目</b> 基于域不变量解耦的抗遗忘跨域迁移</span>
     <span><b>依据</b> docs/research_idea.pdf</span>
     <span><b>实验</b> art_painting → cartoon</span>
-    <span><b>日期</b> 2026-09-09</span>
+    <span><b>日期</b> 2026-09-09　·　裁定 2026-09-11</span>
   </div>
 </header>
 
 <div class="rec">
-  <div class="lbl">最终建议</div>
-  <p>暂停 Stage 2，直至作者澄清 Q1–Q4。</p>
-  <p class="sub">工程缺陷已排除，实验问题已定位。接下来不是「怎么调参」，而是「提案到底要求什么」——继续推进等同于我们替提案补写定义。</p>
+  <div class="lbl">裁定结果</div>
+  <p>依据作者对 Q1–Q4 的裁定，<b>当前 Stage 1 = NO-GO</b>。</p>
+  <p class="sub">原因不是 INN 必须废弃，而是：current Stage 1 objective does not sufficiently identify
+  the intended semantic/style roles under the author-defined requirements.
+  证据与根因见 <code>docs/stage1_diagnosis.html</code>。</p>
 </div>
 
 <section>
@@ -178,39 +193,83 @@ footer{border-top:1px solid var(--rule);padding-top:18px;font-family:var(--mono)
     <div class="id">Q1</div>
     <p class="txt">Stage 1 本身是否被要求产出<b>域不变</b>的 z_c？</p>
     <div class="ev2">Acc(d | z_c, y) = 99.66%，λ_orth = 0 / 25 / 50 三档不变<br>随机基线 33.33%</div>
+    <div class="ruling">
+      <div class="tag">作者裁定 · Q1 = a</div>
+      <p class="verdict">Stage 1 本身必须产出符合理论角色的 z_c：z_c 应代表 domain-invariant semantic / base information。</p>
+      <p>这是<b>定义层面</b>的要求。它确认了提案对底流形 B 的数学角色描述，并把该要求落在 Stage 1 自身，
+      而不是留给后续阶段。</p>
+    </div>
   </div>
 
   <div class="q">
     <div class="id">Q2</div>
     <p class="txt">「施加正交化约束以确保解耦的彻底性」在计算上究竟指什么？切空间正交是否<b>按定义</b>即足够，还是原意包含更强的统计独立性？</p>
     <div class="ev2">L_orth 变化 23×，|cos| 变化 5×<br>而域可预测性一位不动</div>
+    <div class="ruling">
+      <div class="tag">作者裁定 · Q2 = b</div>
+      <p class="verdict">几何正交作为 proposal 中的 geometric constraint <b>保留</b>，
+      但它<b>不是</b>所要求的 semantic/style disentanglement 的<b>充分条件</b>；
+      statistical role separation 也是定义要求的一部分。</p>
+      <p>此处只裁定「不充分」，<b>不</b>额外声称几何正交在数学意义上是 necessary condition。</p>
+      <p><b>这只是定义层面的裁定。</b>它<b>不</b>代表已决定使用 MI、GRL、contrastive、information
+      bottleneck 或任何具体损失函数——机制选择是后续的、独立的决定。</p>
+    </div>
   </div>
 
   <div class="q">
     <div class="id">Q3</div>
     <p class="txt">风格融合开始前，z_s 是否必须是 <b>category-free</b>？若是，预期的可测判据是什么？</p>
     <div class="ev2">Acc(y | z_s) = 31.49% – 38.30%<br>随机基线 14.29%，bootstrap CI 整体高于基线</div>
+    <div class="ruling">
+      <div class="tag">作者裁定 · Q3 = b</div>
+      <p class="verdict">z_s <b>不</b>要求严格 category-free，也不要求 Acc(y | z_s) 接近随机。
+      因此 <code>Acc(y | z_s) ≈ chance</code> <b>不</b>作为 Stage 1 的硬性通过条件。</p>
+      <p>后续需要<b>单独定义</b> style fusion / text conditioning 的语义一致性诊断。
+      这仍然是 definition decision，<b>不</b>意味着已经选定了新的 metric。</p>
+    </div>
   </div>
 
   <div class="q">
     <div class="id">Q4</div>
     <p class="txt">后续的风格融合／文本条件／生成，是仅仅<b>使用</b>这个分解，还是也被期望<b>创造或精炼</b>语义-风格的角色分离？</p>
     <div class="ev2">图 3 中 z_c 无显式下游计算边<br>融合算子用「模拟」沿纤维滑移；语义被称为「完备保留的」（前提假设而非机制）</div>
+    <div class="ruling">
+      <div class="tag">作者裁定 · Q4 = a</div>
+      <p class="verdict">Stage 2/3 原则上<b>使用</b> Stage 1 已经建立的 decomposition，
+      不承担重新定义或修复 z_c / z_s statistical roles 的职责。</p>
+      <p>这保证了 Stage 1 的解耦定义是可证伪的——不能以「后面的生成器会修」来解释 Stage 1 未达标。</p>
+    </div>
   </div>
 </section>
 
 <section>
   <h2>答复后的分支</h2>
-  <p class="lede">仅列忠于提案的路径。任何新增机制都需另行标记为方法学变更。</p>
+  <p class="lede">仅列忠于提案的路径。任何新增机制都需另行标记为方法学变更。
+  <b>标注「生效」的两行即 Q1 = a 与 Q3 = b 裁定后所激活的路径</b>；另两行因 Q2 = b、Q4 = a 而不适用。</p>
   <div class="tw"><table>
     <thead><tr><th style="width:38%">若作者认为</th><th>则</th></tr></thead>
     <tbody>
-      <tr><td>Stage 1 必须已使 z_c 域不变</td><td>当前 Stage 1 为 <b>NO-GO</b>；提案需先澄清缺失的可计算机制，之后才进 Stage 2</td></tr>
+      <tr class="inforce"><td>Stage 1 必须已使 z_c 域不变</td><td>当前 Stage 1 为 <b>NO-GO</b>；提案需先澄清缺失的可计算机制，之后才进 Stage 2</td></tr>
       <tr><td>切空间正交本身即所意图的解耦定义</td><td>需指出当前表征在几何上正交、在统计上非域不变；作者须裁定「绝对域不变量空间」这一理论主张是否应当弱化</td></tr>
       <tr><td>Stage 2/3 意在精炼角色分离</td><td>可以 <b>GO</b>，但须<b>事先</b>定义什么下游诊断能证明该精炼确实发生</td></tr>
-      <tr><td>z_s 无需 category-free</td><td>须澄清文本类别条件如何避免与携带类别信息的风格隐变量发生语义冲突</td></tr>
+      <tr class="inforce"><td>z_s 无需 category-free</td><td>须澄清文本类别条件如何避免与携带类别信息的风格隐变量发生语义冲突</td></tr>
     </tbody>
   </table></div>
+</section>
+
+<section>
+  <div class="guard">
+    <div class="lbl">裁定的边界：definition decision ≠ mechanism decision</div>
+    <p style="margin:0 0 12px;font-size:14.5px;color:var(--mid)">Q1–Q4 裁定的是<b>这项方法承诺什么</b>，
+    不是<b>用什么机制去实现它</b>。两者必须分开记录。</p>
+    <ul>
+      <li><b>Q2 = b 并未授权任何具体的新损失函数。</b>它只确立「几何正交作为 geometric constraint 保留，
+      但不是所要求的解耦的充分条件」——不含关于 necessity 的主张。</li>
+      <li>由 Q2 = b 推不出必须采用域对抗、互信息惩罚、对比学习或信息瓶颈中的任何一种。</li>
+      <li>同样，Q1 = a 推不出「INN 必须废弃」，也推不出「必须修改 1536 / 512 的维度切分」。</li>
+      <li>机制选择需在下一轮单独提出并显式标记，判据是它是否满足上述四条角色要求。</li>
+    </ul>
+  </div>
 </section>
 
 <section>
@@ -230,7 +289,9 @@ footer{border-top:1px solid var(--rule);padding-top:18px;font-family:var(--mono)
 </section>
 
 <footer>
-  Stage 1 实现与验证代码已提交；结果 JSON 与 checkpoint 待作者裁定后一并入库。<br>
+  Stage 1 baseline implementation and core validation code have been committed;
+  exploratory artifacts / results remain outside this decision commit.<br>
+  Q1–Q4 由作者于 2026-09-11 裁定为 a / b / b / a；诊断证据见 <code>docs/stage1_diagnosis.html</code>。<br>
   历史的坏 shuffle checkpoint 保留作 A/B 对照基线。
 </footer>
 
